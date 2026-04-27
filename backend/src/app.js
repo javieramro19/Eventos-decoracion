@@ -2,37 +2,86 @@ require('dotenv').config();
 const express = require('express');
 const helmet = require('helmet');
 const cors = require('cors');
-const db = require('./db/connection'); // Importamos la conexión a la base de datos
+const db = require('./db/connection');
+const { initDatabase } = require('./db/init');
 
 const app = express();
 
-// Middlewares
-app.use(helmet()); // Protege la aplicación de vulnerabilidades comunes
-app.use(cors()); // Permite solicitudes desde cualquier origen
-app.use(express.json()); // Permite parsear el cuerpo de las solicitudes como JSON
+app.use(helmet());
+app.use(cors());
+app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
-// Rutas
+const shouldLogRequests = String(process.env.LOG_REQUESTS || '').toLowerCase() === 'true';
+
+const sanitizeBody = (body) => {
+  if (!body || typeof body !== 'object') return body;
+  const clone = Array.isArray(body) ? [...body] : { ...body };
+  const sensitiveKeys = ['password', 'token'];
+  for (const key of sensitiveKeys) {
+    if (key in clone) clone[key] = '***';
+  }
+  return clone;
+};
+
+const sanitizeAuthHeader = (value) => {
+  if (!value || typeof value !== 'string') return value;
+  if (value.toLowerCase().startsWith('bearer ')) return 'Bearer ***';
+  return '***';
+};
+
+if (shouldLogRequests) {
+  app.use((req, res, next) => {
+    const start = process.hrtime.bigint();
+
+    res.on('finish', () => {
+      const durationMs = Number(process.hrtime.bigint() - start) / 1e6;
+      console.log('[req]', req.method, req.originalUrl, res.statusCode, `${durationMs.toFixed(1)}ms`, {
+        query: req.query,
+        params: req.params,
+        body: sanitizeBody(req.body),
+        auth: sanitizeAuthHeader(req.get('Authorization')),
+        user: req.user ? { id: req.user.id, email: req.user.email } : undefined,
+      });
+    });
+
+    next();
+  });
+}
+
 app.use('/api/auth', require('./routes/auth.routes'));
 app.use('/api/events', require('./routes/events.routes'));
 
 app.get('/api/health', async (req, res) => {
-    try {
-        const [rows] = await db.query('SELECT 1 as result'); // Realiza una consulta simple para verificar la conexión a la base de datos
-        res.json({
-            status: 'Servidor arriba',
-            db: 'Conectada',
-            test: rows[0].result // Devuelve el resultado de la consulta para confirmar que la base de datos está respondiendo correctamente
-        }); // Si la consulta es exitosa, devuelve un estado "ok" y "connected"
-    } catch (err) {
-        res.status(500).json({
-            status: 'error',
-            message: err.message
-        }); // Si ocurre un error, devuelve un estado "error" y el mensaje del error
-    }
+  try {
+    const [rows] = await db.query('SELECT 1 as result');
+    res.json({
+      status: 'Servidor arriba',
+      db: 'Conectada',
+      test: rows[0].result,
+    });
+  } catch (err) {
+    res.status(500).json({
+      status: 'error',
+      message: err.message,
+    });
+  }
 });
 
-const PORT = process.env.PORT || 3000; // Define el puerto en el que se ejecutará la aplicación, usando una variable de entorno o el puerto 3000 por defecto
-app.listen(PORT, () => {
-    console.log(`Servidor escuchando en el puerto ${PORT}`);
-}); // Inicia el servidor y muestra un mensaje en la consola indicando en qué puerto está escuchando
+const PORT = process.env.PORT || 3000;
+
+const startServer = async () => {
+  try {
+    await initDatabase();
+    app.listen(PORT, () => {
+      console.log(`Servidor escuchando en el puerto ${PORT}`);
+    });
+  } catch (error) {
+    console.error('No se pudo iniciar el backend:', error.message || error);
+    process.exit(1);
+  }
+};
+
+startServer();
+
+module.exports = app;

@@ -1,0 +1,29 @@
+<div class="app-shell">
+  <header class="app-header">
+    <a class="brand" routerLink="/">
+      <span class="brand-mark">ES</span>
+      <span class="brand-copy">
+        <span class="brand-title">EventoSonic</span>
+        <span class="brand-subtitle">Diseno y gestion visual para celebraciones</span>
+      </span>
+    </a>
+
+    <nav class="nav-links">
+      <a routerLink="/" [fragment]="'planes'" routerLinkActive="active" [routerLinkActiveOptions]="{ exact: true }">Planes</a>
+      <a *ngIf="authService.isAuthenticated()" routerLink="/dashboard" routerLinkActive="active">Panel</a>
+      <a *ngIf="authService.isAuthenticated()" routerLink="/events" routerLinkActive="active">Eventos</a>
+      <a *ngIf="!authService.isAuthenticated()" routerLink="/auth/login" routerLinkActive="active">Login</a>
+      <a *ngIf="!authService.isAuthenticated()" routerLink="/auth/register" routerLinkActive="active">Registro</a>
+    </nav>
+
+    <div class="user-block">
+      <a *ngIf="!authService.isAuthenticated()" class="cta-link" routerLink="/" fragment="planes">Ver planes</a>
+      <a *ngIf="authService.isAuthenticated()" class="cta-link" routerLink="/" fragment="planes">Elegir plan</a>
+      <button *ngIf="authService.isAuthenticated()" class="logout" type="button" (click)="authService.logout()">Cerrar sesion</button>
+    </div>
+  </header>
+
+  <main class="router-shell">
+    <router-outlet></router-outlet>
+  </main>
+</div>

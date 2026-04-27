@@ -4,6 +4,12 @@ const jwt = require('jsonwebtoken');
 const { validationResult } = require('express-validator');
 
 const SALT_ROUNDS = 12;
+const shouldLogControllers = String(process.env.LOG_CONTROLLERS || '').toLowerCase() === 'true';
+
+const logAuth = (action, data) => {
+  if (!shouldLogControllers) return;
+  console.log('[auth]', action, data);
+};
 
 // POST /api/auth/register
 exports.register = async (req, res) => {
@@ -14,6 +20,7 @@ exports.register = async (req, res) => {
 
   try {
     const { name, email, password } = req.body;
+    logAuth('register request', { name, email });
 
     const [existing] = await pool.query('SELECT id FROM users WHERE email = ?', [email]);
     if (existing.length > 0) {
@@ -39,7 +46,7 @@ exports.register = async (req, res) => {
       user: { id: result.insertId, name, email },
     });
   } catch (error) {
-    console.error('Error en registro:', error);
+    console.error('Error en registro:', error.message || error);
     res.status(500).json({ error: 'Error al registrar el usuario' });
   }
 };
@@ -53,6 +60,7 @@ exports.login = async (req, res) => {
 
   try {
     const { email, password } = req.body;
+    logAuth('login request', { email });
 
     const [rows] = await pool.query('SELECT * FROM users WHERE email = ?', [email]);
     if (rows.length === 0) {
@@ -77,7 +85,7 @@ exports.login = async (req, res) => {
       user: { id: user.id, name: user.name, email: user.email },
     });
   } catch (error) {
-    console.error('Error en login:', error);
+    console.error('Error en login:', error.message || error);
     res.status(500).json({ error: 'Error al iniciar sesión' });
   }
 };
@@ -85,6 +93,7 @@ exports.login = async (req, res) => {
 // GET /api/auth/me
 exports.me = async (req, res) => {
   try {
+    logAuth('me request', { userId: req.user?.id });
     const [rows] = await pool.query(
       'SELECT id, name, email, createdAt FROM users WHERE id = ?',
       [req.user.id]
@@ -94,6 +103,7 @@ exports.me = async (req, res) => {
     }
     res.json(rows[0]);
   } catch (error) {
+    console.error('Error en me:', error.message || error);
     res.status(500).json({ error: 'Error al obtener el perfil' });
   }
 };

@@ -6,6 +6,7 @@ const { createEventoValidators, updateEventoValidators } = require('../validator
 // Aplicamos el middleware a todas las rutas de este archivo
 router.use(authMiddleware);
 
+router.get('/stats/summary', controller.getStatsSummary);
 router.get('/', controller.getAll);
 router.get('/:id', controller.getById);
 router.post('/', createEventoValidators, controller.create);

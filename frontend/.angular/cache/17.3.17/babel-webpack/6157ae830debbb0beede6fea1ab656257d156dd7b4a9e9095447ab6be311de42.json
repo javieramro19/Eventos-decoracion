@@ -1,0 +1,1 @@
+{"ast":null,"code":"import { provideHttpClient, withInterceptorsFromDi } from '@angular/common/http';\nimport { authInterceptorProvider } from './core/auth/auth.interceptor';\nexport const appConfigProviders = [provideHttpClient(withInterceptorsFromDi()), authInterceptorProvider];","map":null,"metadata":{},"sourceType":"module","externalDependencies":[]}

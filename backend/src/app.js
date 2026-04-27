@@ -10,10 +10,15 @@ const app = express();
 app.use(helmet()); // Protege la aplicación de vulnerabilidades comunes
 app.use(cors()); // Permite solicitudes desde cualquier origen
 app.use(express.json()); // Permite parsear el cuerpo de las solicitudes como JSON
+app.use(express.urlencoded({ extended: true }));
+
+// Rutas
+app.use('/api/auth', require('./routes/auth.routes'));
+app.use('/api/events', require('./routes/events.routes'));
 
 app.get('/api/health', async (req, res) => {
     try {
-        const [rows] = await db.query('SELECT 1'); // Realiza una consulta simple para verificar la conexión a la base de datos
+        const [rows] = await db.query('SELECT 1 as result'); // Realiza una consulta simple para verificar la conexión a la base de datos
         res.json({
             status: 'Servidor arriba',
             db: 'Conectada',

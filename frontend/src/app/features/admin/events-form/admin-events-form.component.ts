@@ -2,26 +2,29 @@ import { Component, OnInit, computed, signal } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormBuilder, ReactiveFormsModule, Validators } from '@angular/forms';
 import { ActivatedRoute, Router, RouterModule } from '@angular/router';
+import { CdkDragDrop, DragDropModule, moveItemInArray } from '@angular/cdk/drag-drop';
 import { MatButtonModule } from '@angular/material/button';
+import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
+import { Evento, GalleryImage } from '../../../core/models/event.model';
 import { EventoService } from '../../../core/services/events.service';
 
 @Component({
   selector: 'app-admin-events-form',
   standalone: true,
-  imports: [CommonModule, ReactiveFormsModule, RouterModule, MatButtonModule],
+  imports: [CommonModule, ReactiveFormsModule, RouterModule, DragDropModule, MatButtonModule, MatProgressSpinnerModule],
   template: `
     <div class="form-shell">
       <section class="intro-card">
         <span class="eyebrow">{{ isEditing ? 'Editar evento' : 'Nuevo evento' }}</span>
         <h1>{{ isEditing ? 'Actualiza un evento del portfolio' : 'Crea un evento privado para el panel' }}</h1>
-        <p>El slug se regenera desde el título y puedes decidir si el proyecto sale publicado o permanece como borrador.</p>
+        <p>Guarda primero la base del evento y despues alimenta la galeria con imagenes reales, orden y captions.</p>
       </section>
 
       <section class="form-card">
         <form [formGroup]="form" (ngSubmit)="onSubmit()">
           <div class="grid-two">
             <div class="sonic-field">
-              <label for="title">Título del evento</label>
+              <label for="title">Titulo del evento</label>
               <input id="title" formControlName="title" placeholder="Ej. Mesa boda romantica">
               <span class="field-error" *ngIf="form.get('title')?.touched && form.get('title')?.hasError('required')">El titulo es obligatorio</span>
             </div>
@@ -32,7 +35,7 @@ import { EventoService } from '../../../core/services/events.service';
             </div>
 
             <div class="sonic-field">
-              <label for="category">Categoría</label>
+              <label for="category">Categoria</label>
               <select id="category" formControlName="category">
                 <option value="wedding">Boda</option>
                 <option value="birthday">Cumpleanos</option>
@@ -49,42 +52,31 @@ import { EventoService } from '../../../core/services/events.service';
             </div>
 
             <div class="sonic-field">
-              <label for="location">Ubicación</label>
+              <label for="location">Ubicacion</label>
               <input id="location" formControlName="location" placeholder="Finca, hotel, restaurante...">
             </div>
 
             <div class="sonic-field">
-              <label for="coverImage">Imagen principal</label>
-              <input id="coverImage" formControlName="coverImage" placeholder="https://...">
+              <label for="planName">Plan contratado</label>
+              <input id="planName" formControlName="planName" placeholder="Ej. Signature Garden">
             </div>
           </div>
 
           <div class="sonic-field">
-            <label for="description">Descripción</label>
+            <label for="description">Descripcion</label>
             <textarea id="description" formControlName="description" rows="6" placeholder="Cuenta el ambiente, el montaje y los detalles visuales del evento."></textarea>
           </div>
 
           <div class="grid-two">
             <div class="sonic-field">
-              <label for="planName">Plan contratado</label>
-              <input id="planName" formControlName="planName" placeholder="Ej. Signature Garden">
+              <label for="planSummary">Resumen del plan</label>
+              <textarea id="planSummary" formControlName="planSummary" rows="4" placeholder="Que incluye el plan y por que encaja con este evento."></textarea>
             </div>
 
             <div class="sonic-field">
               <label for="totalPrice">Precio estimado final</label>
               <input id="totalPrice" type="number" min="0" formControlName="totalPrice" placeholder="0">
             </div>
-          </div>
-
-          <div class="sonic-field">
-            <label for="planSummary">Resumen del plan</label>
-            <textarea id="planSummary" formControlName="planSummary" rows="4" placeholder="Que incluye el plan y por que encaja con este evento."></textarea>
-          </div>
-
-          <div class="sonic-field">
-            <label for="images">Galería de imágenes</label>
-            <textarea id="images" formControlName="imagesText" rows="5" placeholder="Una URL por linea"></textarea>
-            <span class="field-hint">La primera URL se usa como apoyo visual si no indicas imagen principal.</span>
           </div>
 
           <label class="publish-box">
@@ -103,18 +95,90 @@ import { EventoService } from '../../../core/services/events.service';
           </div>
         </form>
       </section>
+
+      <section class="gallery-card" *ngIf="isEditing; else saveFirstTpl">
+        <div class="gallery-head">
+          <div>
+            <span class="eyebrow">Galeria</span>
+            <h2>Imagenes del evento</h2>
+            <p>Sube hasta 5MB por imagen en JPEG, PNG o WebP. Arrastra para reordenar y desactiva las que no quieras mostrar.</p>
+          </div>
+          <label class="upload-button" [class.upload-button--disabled]="uploading()">
+            <input type="file" accept="image/jpeg,image/png,image/webp" multiple (change)="onFilesSelected($event)" [disabled]="uploading()">
+            <span>{{ uploading() ? 'Subiendo...' : 'Subir imagenes' }}</span>
+          </label>
+        </div>
+
+        <p *ngIf="galleryMessage()" class="gallery-message">{{ galleryMessage() }}</p>
+
+        <div *ngIf="uploading()" class="uploading-state">
+          <mat-spinner diameter="34"></mat-spinner>
+          <span>Procesando archivos...</span>
+        </div>
+
+        <div *ngIf="gallery().length === 0" class="gallery-empty">
+          <div class="ui-mark">ES</div>
+          <p>Este evento todavia no tiene imagenes. Sube la primera para empezar a construir la galeria.</p>
+        </div>
+
+        <div
+          *ngIf="gallery().length > 0"
+          cdkDropList
+          class="gallery-grid"
+          (cdkDropListDropped)="onGalleryDrop($event)"
+        >
+          <article *ngFor="let image of gallery(); trackBy: trackByImageId" cdkDrag class="gallery-item" [class.gallery-item--inactive]="!image.isActive">
+            <div class="gallery-item__media" [style.background-image]="getImageStyle(image.imageUrl)">
+              <button type="button" cdkDragHandle class="drag-handle" aria-label="Reordenar imagen">::</button>
+              <span class="status-chip" [class.status-chip--inactive]="!image.isActive">
+                {{ image.isActive ? 'Activa' : 'Oculta' }}
+              </span>
+            </div>
+
+            <div class="gallery-item__body">
+              <div class="gallery-item__controls">
+                <label class="switch">
+                  <input type="checkbox" [checked]="image.isActive" (change)="toggleImage(image, $any($event.target).checked)" [disabled]="busyGalleryIds().includes(image.id)">
+                  <span class="switch-ui"></span>
+                  <span>{{ image.isActive ? 'Visible' : 'Oculta' }}</span>
+                </label>
+
+                <button mat-stroked-button class="danger-button" type="button" (click)="deleteImage(image)" [disabled]="busyGalleryIds().includes(image.id)">Eliminar</button>
+              </div>
+
+              <label class="sonic-field">
+                <span>Caption</span>
+                <input
+                  [value]="image.caption || ''"
+                  placeholder="Describe la escena, los tonos o el montaje"
+                  (blur)="updateCaption(image, $any($event.target).value)"
+                >
+              </label>
+            </div>
+          </article>
+        </div>
+      </section>
+
+      <ng-template #saveFirstTpl>
+        <section class="gallery-card gallery-card--muted">
+          <span class="eyebrow">Galeria</span>
+          <h2>Guarda el evento para empezar a subir imagenes</h2>
+          <p>Necesitamos el ID del evento antes de aceptar archivos y ordenar la galeria.</p>
+        </section>
+      </ng-template>
     </div>
   `,
   styles: [
     `
       .form-shell {
-        max-width: 1080px;
+        max-width: 1120px;
         margin: 0 auto;
         display: grid;
         gap: 1rem;
       }
       .intro-card,
-      .form-card {
+      .form-card,
+      .gallery-card {
         border-radius: 32px;
         border: 1px solid var(--border);
         box-shadow: var(--shadow-sm);
@@ -125,16 +189,26 @@ import { EventoService } from '../../../core/services/events.service';
           radial-gradient(circle at top left, rgba(212, 175, 122, 0.2), transparent 25%),
           linear-gradient(135deg, #fbf5ee 0%, #efe5da 100%);
       }
-      .form-card {
+      .form-card,
+      .gallery-card {
         padding: 1.7rem;
         background: rgba(255, 255, 255, 0.88);
       }
+      .gallery-card--muted {
+        background: linear-gradient(180deg, #fffdf9 0%, #f7f1ea 100%);
+      }
+      h1, h2 {
+        margin: 0;
+        font-family: var(--font-display);
+        line-height: 1.08;
+      }
       h1 {
         margin: 0.75rem 0 0.5rem;
-        font-family: var(--font-display);
         font-size: clamp(2.2rem, 4vw, 4rem);
-        line-height: 1.08;
         max-width: 13ch;
+      }
+      h2 {
+        font-size: clamp(1.8rem, 3vw, 2.4rem);
       }
       p {
         color: var(--text-soft);
@@ -156,7 +230,8 @@ import { EventoService } from '../../../core/services/events.service';
         border-radius: 22px;
         background: rgba(245, 230, 218, 0.5);
       }
-      .publish-box input {
+      .publish-box input,
+      .switch input {
         width: auto;
         margin-top: 0.2rem;
         accent-color: var(--accent-strong);
@@ -174,9 +249,169 @@ import { EventoService } from '../../../core/services/events.service';
         gap: 0.75rem;
         margin-top: 0.5rem;
       }
-      @media (max-width: 760px) {
-        .grid-two {
+      .gallery-head {
+        display: flex;
+        justify-content: space-between;
+        gap: 1rem;
+        align-items: flex-start;
+      }
+      .upload-button {
+        position: relative;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        min-height: 3rem;
+        padding: 0.85rem 1.3rem;
+        border-radius: 999px;
+        background: linear-gradient(135deg, #d4af7a 0%, #efd8b7 100%);
+        color: #221c17;
+        font-weight: 800;
+        cursor: pointer;
+      }
+      .upload-button input {
+        position: absolute;
+        inset: 0;
+        opacity: 0;
+        cursor: pointer;
+      }
+      .upload-button--disabled {
+        opacity: 0.7;
+        pointer-events: none;
+      }
+      .gallery-message {
+        margin: 1rem 0 0;
+        color: var(--accent-strong);
+        font-weight: 700;
+      }
+      .uploading-state,
+      .gallery-empty {
+        display: flex;
+        align-items: center;
+        gap: 0.85rem;
+        margin-top: 1rem;
+        padding: 1rem 1.1rem;
+        border-radius: 22px;
+        background: rgba(245, 230, 218, 0.4);
+      }
+      .gallery-grid {
+        display: grid;
+        gap: 1rem;
+        margin-top: 1rem;
+      }
+      .gallery-item {
+        display: grid;
+        grid-template-columns: minmax(240px, 320px) minmax(0, 1fr);
+        gap: 1rem;
+        padding: 1rem;
+        border-radius: 24px;
+        border: 1px solid rgba(44, 44, 44, 0.08);
+        background: linear-gradient(180deg, #ffffff 0%, #faf5ee 100%);
+      }
+      .gallery-item--inactive {
+        opacity: 0.72;
+      }
+      .gallery-item__media {
+        position: relative;
+        min-height: 220px;
+        border-radius: 22px;
+        background:
+          linear-gradient(135deg, rgba(212, 175, 122, 0.25), rgba(245, 230, 218, 0.85));
+        background-size: cover;
+        background-position: center;
+        overflow: hidden;
+      }
+      .drag-handle {
+        position: absolute;
+        top: 0.8rem;
+        left: 0.8rem;
+        width: 2.4rem;
+        height: 2.4rem;
+        padding: 0;
+        border-radius: 999px;
+        background: rgba(255, 255, 255, 0.88);
+        box-shadow: none;
+        font-weight: 900;
+        letter-spacing: 0.1em;
+      }
+      .status-chip {
+        position: absolute;
+        right: 0.8rem;
+        top: 0.8rem;
+        display: inline-flex;
+        padding: 0.4rem 0.75rem;
+        border-radius: 999px;
+        background: rgba(110, 203, 141, 0.18);
+        color: #418b58;
+        font-size: 0.8rem;
+        font-weight: 800;
+      }
+      .status-chip--inactive {
+        background: rgba(120, 120, 120, 0.16);
+        color: #5f5a54;
+      }
+      .gallery-item__body {
+        display: grid;
+        gap: 1rem;
+        align-content: start;
+      }
+      .gallery-item__controls {
+        display: flex;
+        justify-content: space-between;
+        gap: 0.75rem;
+        align-items: center;
+      }
+      .switch {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.7rem;
+        font-weight: 700;
+      }
+      .switch input {
+        position: absolute;
+        opacity: 0;
+        pointer-events: none;
+      }
+      .switch-ui {
+        position: relative;
+        width: 58px;
+        height: 32px;
+        border-radius: 999px;
+        background: rgba(120, 120, 120, 0.24);
+        transition: background 0.25s ease;
+      }
+      .switch-ui::after {
+        content: '';
+        position: absolute;
+        top: 4px;
+        left: 4px;
+        width: 24px;
+        height: 24px;
+        border-radius: 50%;
+        background: #fff;
+        box-shadow: 0 6px 16px rgba(44, 44, 44, 0.18);
+        transition: transform 0.25s ease;
+      }
+      .switch input:checked + .switch-ui {
+        background: linear-gradient(135deg, #7cc18d 0%, #5aa872 100%);
+      }
+      .switch input:checked + .switch-ui::after {
+        transform: translateX(26px);
+      }
+      .danger-button {
+        border-color: rgba(200, 72, 72, 0.24) !important;
+        color: #b54848 !important;
+      }
+      @media (max-width: 860px) {
+        .grid-two,
+        .gallery-item {
           grid-template-columns: 1fr;
+        }
+      }
+      @media (max-width: 760px) {
+        .actions,
+        .gallery-head,
+        .gallery-item__controls {
+          display: grid;
         }
         .actions {
           flex-direction: column-reverse;
@@ -192,14 +427,17 @@ export class AdminEventsFormComponent implements OnInit {
     eventDate: [''],
     location: [''],
     description: ['', Validators.maxLength(2000)],
-    coverImage: ['', Validators.maxLength(500)],
-    imagesText: [''],
     planName: ['', Validators.maxLength(120)],
     planSummary: ['', Validators.maxLength(2000)],
     totalPrice: [null as number | null],
     isPublished: [false],
   });
   saving = signal(false);
+  uploading = signal(false);
+  galleryMessage = signal('');
+  gallery = signal<GalleryImage[]>([]);
+  busyGalleryIds = signal<number[]>([]);
+  currentEvent = signal<Evento | null>(null);
   isEditing = false;
   itemId?: number;
   slugPreview = computed(() => this.generateSlug(this.form.get('title')?.value || ''));
@@ -216,22 +454,26 @@ export class AdminEventsFormComponent implements OnInit {
     this.isEditing = !!this.itemId;
 
     if (this.isEditing) {
-      this.eventsService.getAdminEventById(this.itemId!).subscribe((item) => {
-        this.form.patchValue({
-          title: item.title,
-          category: item.category || 'other',
-          eventDate: item.eventDate || '',
-          location: item.location || '',
-          description: item.description || '',
-          coverImage: item.coverImage || '',
-          imagesText: (item.images || []).join('\n'),
-          planName: item.planName || '',
-          planSummary: item.planSummary || '',
-          totalPrice: item.totalPrice ?? null,
-          isPublished: item.isPublished,
-        });
-      });
+      this.loadEvent(this.itemId!);
     }
+  }
+
+  loadEvent(eventId: number): void {
+    this.eventsService.getAdminEventById(eventId).subscribe((item) => {
+      this.currentEvent.set(item);
+      this.gallery.set(item.gallery || []);
+      this.form.patchValue({
+        title: item.title,
+        category: item.category || 'other',
+        eventDate: item.eventDate || '',
+        location: item.location || '',
+        description: item.description || '',
+        planName: item.planName || '',
+        planSummary: item.planSummary || '',
+        totalPrice: item.totalPrice ?? null,
+        isPublished: item.isPublished,
+      });
+    });
   }
 
   onSubmit(): void {
@@ -242,19 +484,12 @@ export class AdminEventsFormComponent implements OnInit {
 
     this.saving.set(true);
     const raw = this.form.getRawValue();
-    const images = String(raw.imagesText || '')
-      .split(/\r?\n/)
-      .map((item) => item.trim())
-      .filter(Boolean);
-
     const payload = {
       title: raw.title?.trim() || '',
       category: raw.category || 'other',
       eventDate: raw.eventDate || undefined,
       location: raw.location?.trim() || undefined,
       description: raw.description?.trim() || undefined,
-      coverImage: raw.coverImage?.trim() || undefined,
-      images,
       planName: raw.planName?.trim() || undefined,
       planSummary: raw.planSummary?.trim() || undefined,
       totalPrice: raw.totalPrice ?? undefined,
@@ -266,10 +501,130 @@ export class AdminEventsFormComponent implements OnInit {
       : this.eventsService.createAdminEvent(payload);
 
     request.subscribe({
-      next: (event) => this.router.navigate(['/admin/events', event.id, 'edit']),
+      next: (event) => {
+        this.currentEvent.set(event);
+        this.gallery.set(event.gallery || []);
+        this.router.navigate(['/admin/events', event.id, 'edit']);
+      },
       error: () => this.saving.set(false),
       complete: () => this.saving.set(false),
     });
+  }
+
+  onFilesSelected(event: Event): void {
+    const input = event.target as HTMLInputElement;
+    const files = Array.from(input.files || []);
+
+    if (!this.itemId || files.length === 0) {
+      return;
+    }
+
+    this.galleryMessage.set('');
+    this.uploading.set(true);
+    this.eventsService.uploadEventImages(this.itemId, files).subscribe({
+      next: (response) => {
+        this.currentEvent.set(response.event);
+        this.gallery.set(response.gallery);
+        this.galleryMessage.set(`${files.length} imagen(es) subidas correctamente.`);
+      },
+      error: (error) => {
+        this.galleryMessage.set(error?.error?.error || 'No se pudieron subir las imagenes.');
+        this.uploading.set(false);
+      },
+      complete: () => {
+        this.uploading.set(false);
+        input.value = '';
+      },
+    });
+  }
+
+  onGalleryDrop(event: CdkDragDrop<GalleryImage[]>): void {
+    if (!this.itemId || event.previousIndex === event.currentIndex) {
+      return;
+    }
+
+    const reordered = [...this.gallery()];
+    moveItemInArray(reordered, event.previousIndex, event.currentIndex);
+    this.gallery.set(reordered.map((image, index) => ({ ...image, order: index })));
+
+    this.eventsService.reorderEventGallery(
+      this.itemId,
+      this.gallery().map((image, index) => ({ id: image.id, order: index }))
+    ).subscribe({
+      next: (response) => {
+        this.currentEvent.set(response.event);
+        this.gallery.set(response.gallery);
+      },
+      error: () => {
+        this.galleryMessage.set('No se pudo guardar el nuevo orden de la galeria.');
+        this.loadEvent(this.itemId!);
+      },
+    });
+  }
+
+  toggleImage(image: GalleryImage, isActive: boolean): void {
+    if (!this.itemId) {
+      return;
+    }
+
+    this.markGalleryBusy(image.id, true);
+    this.eventsService.updateGalleryImage(this.itemId, image.id, { isActive }).subscribe({
+      next: (response) => {
+        this.currentEvent.set(response.event);
+        this.gallery.set(response.gallery);
+        this.markGalleryBusy(image.id, false);
+      },
+      error: () => this.markGalleryBusy(image.id, false),
+    });
+  }
+
+  updateCaption(image: GalleryImage, value: string): void {
+    if (!this.itemId || (image.caption || '') === value.trim()) {
+      return;
+    }
+
+    this.markGalleryBusy(image.id, true);
+    this.eventsService.updateGalleryImage(this.itemId, image.id, { caption: value.trim() }).subscribe({
+      next: (response) => {
+        this.currentEvent.set(response.event);
+        this.gallery.set(response.gallery);
+        this.markGalleryBusy(image.id, false);
+      },
+      error: () => this.markGalleryBusy(image.id, false),
+    });
+  }
+
+  deleteImage(image: GalleryImage): void {
+    if (!this.itemId || !confirm('Eliminar esta imagen de la galeria?')) {
+      return;
+    }
+
+    this.markGalleryBusy(image.id, true);
+    this.eventsService.deleteGalleryImage(this.itemId, image.id).subscribe({
+      next: (response) => {
+        this.currentEvent.set(response.event);
+        this.gallery.set(response.gallery);
+        this.markGalleryBusy(image.id, false);
+      },
+      error: () => this.markGalleryBusy(image.id, false),
+    });
+  }
+
+  trackByImageId(_index: number, image: GalleryImage): number {
+    return image.id;
+  }
+
+  getImageStyle(url: string): string {
+    return `url('${this.eventsService.resolveAssetUrl(url)}')`;
+  }
+
+  private markGalleryBusy(imageId: number, busy: boolean): void {
+    if (busy) {
+      this.busyGalleryIds.update((ids) => Array.from(new Set([...ids, imageId])));
+      return;
+    }
+
+    this.busyGalleryIds.update((ids) => ids.filter((id) => id !== imageId));
   }
 
   private generateSlug(value: string): string {

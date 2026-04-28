@@ -19,8 +19,20 @@ export interface Evento {
   totalPrice?: number;
   customExtraNote?: string;
   selectedExtras?: PlanSelectionExtra[];
+  gallery?: GalleryImage[];
   source?: string;
   createdAt: string;
+  updatedAt?: string;
+}
+
+export interface GalleryImage {
+  id: number;
+  eventId: number;
+  imageUrl: string;
+  caption?: string;
+  order: number;
+  isActive: boolean;
+  createdAt?: string;
   updatedAt?: string;
 }
 
@@ -54,6 +66,11 @@ export interface CreateEventoDto {
 }
 
 export interface UpdateEventoDto extends Partial<CreateEventoDto> {}
+
+export interface GalleryMutationResponse {
+  event: Evento;
+  gallery: GalleryImage[];
+}
 
 export interface DashboardStatItem {
   status: string;

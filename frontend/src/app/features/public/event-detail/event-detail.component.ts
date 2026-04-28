@@ -56,10 +56,11 @@ import { EventoService } from '../../../core/services/events.service';
           <article class="gallery-card">
             <div class="main-image" [style.background-image]="selectedImage() ? 'url(' + selectedImage() + ')' : getCoverStyle(event)"></div>
             <div class="thumb-grid" *ngIf="galleryImages(event).length > 0">
-              <button type="button" *ngFor="let image of galleryImages(event)" class="thumb-button" (click)="selectedImage.set(image)">
+              <button type="button" *ngFor="let image of galleryImages(event)" class="thumb-button" (click)="updateSelectedImage(event, image)">
                 <span [style.background-image]="'url(' + image + ')'"></span>
               </button>
             </div>
+            <p *ngIf="selectedCaption()" class="caption-note">{{ selectedCaption() }}</p>
             <a mat-stroked-button routerLink="/eventos">Volver a eventos</a>
           </article>
         </section>
@@ -205,6 +206,10 @@ import { EventoService } from '../../../core/services/events.service';
         text-align: center;
         background: linear-gradient(180deg, #fffdf9 0%, #f7f1ea 100%);
       }
+      .caption-note {
+        margin: 1rem 0;
+        color: var(--text-soft);
+      }
       @media (max-width: 980px) {
         .content-grid {
           grid-template-columns: 1fr;
@@ -226,6 +231,7 @@ export class PublicEventDetailComponent implements OnInit {
   item = signal<Evento | null>(null);
   loading = signal(false);
   selectedImage = signal<string | null>(null);
+  selectedCaption = signal<string>('');
 
   constructor(
     private eventsService: EventoService,
@@ -244,7 +250,9 @@ export class PublicEventDetailComponent implements OnInit {
     this.eventsService.getPublicEventBySlug(slug).subscribe({
       next: (event) => {
         this.item.set(event);
-        this.selectedImage.set(event.coverImage || event.images?.[0] || null);
+        const firstImage = event.gallery?.[0]?.imageUrl || event.coverImage || event.images?.[0] || null;
+        this.selectedImage.set(firstImage ? this.eventsService.resolveAssetUrl(firstImage) : null);
+        this.selectedCaption.set(event.gallery?.[0]?.caption || '');
         this.loading.set(false);
       },
       error: () => {
@@ -255,16 +263,32 @@ export class PublicEventDetailComponent implements OnInit {
   }
 
   galleryImages(event: Evento): string[] {
+    const gallery = (event.gallery || [])
+      .filter((image) => image.isActive)
+      .sort((left, right) => left.order - right.order);
+
+    if (gallery.length > 0) {
+      return gallery.map((image) => this.eventsService.resolveAssetUrl(image.imageUrl));
+    }
+
     const images = event.images || [];
     if (event.coverImage && !images.includes(event.coverImage)) {
-      return [event.coverImage, ...images];
+      return [this.eventsService.resolveAssetUrl(event.coverImage), ...images.map((image) => this.eventsService.resolveAssetUrl(image))];
     }
-    return images;
+    return images.map((image) => this.eventsService.resolveAssetUrl(image));
   }
 
   getCoverStyle(event: Evento): string {
     const image = event.coverImage || event.images?.[0];
-    return image ? `url('${image}')` : '';
+    return image ? `url('${this.eventsService.resolveAssetUrl(image)}')` : '';
+  }
+
+  updateSelectedImage(event: Evento, imageUrl: string): void {
+    this.selectedImage.set(imageUrl);
+    const match = (event.gallery || []).find(
+      (image) => this.eventsService.resolveAssetUrl(image.imageUrl) === imageUrl
+    );
+    this.selectedCaption.set(match?.caption || '');
   }
 
   formatEventDate(value?: string): string {

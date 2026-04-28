@@ -191,6 +191,6 @@ export class PublicEventsGalleryComponent implements OnInit {
 
   getCoverStyle(item: Evento): string {
     const image = item.coverImage || item.images?.[0];
-    return image ? `url('${image}')` : '';
+    return image ? `url('${this.eventsService.resolveAssetUrl(image)}')` : '';
   }
 }

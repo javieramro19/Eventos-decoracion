@@ -2,6 +2,7 @@ require('dotenv').config();
 const express = require('express');
 const helmet = require('helmet');
 const cors = require('cors');
+const path = require('path');
 const db = require('./db/connection');
 const { initDatabase } = require('./db/init');
 
@@ -11,6 +12,7 @@ app.use(helmet());
 app.use(cors());
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
+app.use('/uploads', express.static(path.join(__dirname, '..', 'uploads')));
 
 const shouldLogRequests = String(process.env.LOG_REQUESTS || '').toLowerCase() === 'true';
 
@@ -68,6 +70,25 @@ app.get('/api/health', async (req, res) => {
       message: err.message,
     });
   }
+});
+
+app.use((error, _req, res, next) => {
+  if (!error) {
+    next();
+    return;
+  }
+
+  if (error.code === 'LIMIT_FILE_SIZE') {
+    res.status(400).json({ error: 'Cada imagen debe pesar como maximo 5MB' });
+    return;
+  }
+
+  if (error.message) {
+    res.status(400).json({ error: error.message });
+    return;
+  }
+
+  next(error);
 });
 
 const PORT = process.env.PORT || 3000;

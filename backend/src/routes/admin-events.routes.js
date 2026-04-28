@@ -1,6 +1,7 @@
 const router = require('express').Router();
 const controller = require('../controllers/events.controller');
 const { authMiddleware } = require('../middleware/auth.middleware');
+const { uploadGalleryImages } = require('../middleware/upload.middleware');
 const { createEventoValidators, updateEventoValidators } = require('../validators/events.validators');
 
 router.use(authMiddleware);
@@ -8,7 +9,12 @@ router.use(authMiddleware);
 router.get('/stats/summary', controller.getStatsSummary);
 router.get('/', controller.getAdminEvents);
 router.get('/:id', controller.getAdminEventById);
+router.get('/:id/gallery', controller.getAdminEventGallery);
 router.post('/', createEventoValidators, controller.createAdminEvent);
+router.post('/:id/gallery/upload', uploadGalleryImages.array('images', 12), controller.uploadAdminEventGalleryImages);
+router.put('/:id/gallery/reorder', controller.reorderAdminEventGallery);
+router.put('/:id/gallery/:imageId', controller.updateAdminEventGalleryImage);
+router.delete('/:id/gallery/:imageId', controller.removeAdminEventGalleryImage);
 router.put('/:id/publish', controller.publishAdminEvent);
 router.put('/:id/unpublish', controller.unpublishAdminEvent);
 router.put('/:id', updateEventoValidators, controller.updateAdminEvent);

@@ -105,6 +105,94 @@ const sanitizeImages = (images, coverImage) => {
   return clean.slice(0, 20);
 };
 
+const normalizeGalleryItem = (row) => ({
+  id: row.id,
+  eventId: row.eventId,
+  imageUrl: row.imageUrl,
+  caption: row.caption,
+  order: Number(row.order) || 0,
+  isActive: Boolean(row.isActive),
+  createdAt: row.createdAt,
+  updatedAt: row.updatedAt,
+});
+
+const getGalleryRowsByEventId = async (eventId, options = {}) => {
+  const { includeInactive = true } = options;
+  const params = [eventId];
+  let query = `
+    SELECT id, eventId, imageUrl, caption, \`order\`, isActive, createdAt, updatedAt
+    FROM gallery
+    WHERE eventId = ?
+  `;
+
+  if (!includeInactive) {
+    query += ' AND isActive = 1';
+  }
+
+  query += ' ORDER BY `order` ASC, id ASC';
+
+  const [rows] = await pool.query(query, params);
+  return rows.map(normalizeGalleryItem);
+};
+
+const syncEventGallerySnapshot = async (eventId) => {
+  const gallery = await getGalleryRowsByEventId(eventId, { includeInactive: false });
+  const activeImages = gallery.map((item) => item.imageUrl);
+  const coverImage = activeImages[0] || null;
+
+  await pool.query(
+    'UPDATE events SET coverImage = ?, imagesJson = ? WHERE id = ?',
+    [coverImage, JSON.stringify(activeImages), eventId]
+  );
+
+  return gallery;
+};
+
+const buildEventResponse = async (row, options = {}) => {
+  const normalized = normalizeEvent(row);
+
+  if (!normalized) {
+    return normalized;
+  }
+
+  if (!options.includeGallery) {
+    return normalized;
+  }
+
+  const gallery = await getGalleryRowsByEventId(normalized.id, {
+    includeInactive: options.includeInactiveGallery !== false,
+  });
+
+  return {
+    ...normalized,
+    gallery,
+  };
+};
+
+const replaceGalleryFromImageUrls = async (eventId, imageUrls = []) => {
+  await pool.query('DELETE FROM gallery WHERE eventId = ?', [eventId]);
+
+  const uniqueImages = sanitizeImages(imageUrls);
+  for (const [index, imageUrl] of uniqueImages.entries()) {
+    await pool.query(
+      'INSERT INTO gallery (eventId, imageUrl, caption, `order`, isActive) VALUES (?, ?, NULL, ?, 1)',
+      [eventId, imageUrl, index]
+    );
+  }
+
+  return syncEventGallerySnapshot(eventId);
+};
+
+const sendGalleryMutationResponse = async (res, eventId, userId) => {
+  const event = await findOwnedEvent(eventId, userId);
+  const gallery = await getGalleryRowsByEventId(eventId, { includeInactive: true });
+
+  res.json({
+    event: await buildEventResponse(event, { includeGallery: true, includeInactiveGallery: true }),
+    gallery,
+  });
+};
+
 const normalizeEvent = (row) => {
   if (!row) {
     return row;
@@ -228,7 +316,7 @@ exports.getPublicEventBySlug = async (req, res) => {
       return res.status(404).json({ error: 'Evento publico no encontrado' });
     }
 
-    res.json(normalizeEvent(rows[0]));
+    res.json(await buildEventResponse(rows[0], { includeGallery: true, includeInactiveGallery: false }));
   } catch (error) {
     console.error('Error al obtener evento publico:', error.message || error);
     res.status(500).json({ error: 'Error al obtener evento publico' });
@@ -276,10 +364,24 @@ exports.getAdminEventById = async (req, res) => {
       return res.status(404).json({ error: 'Evento no encontrado' });
     }
 
-    res.json(normalizeEvent(event));
+    res.json(await buildEventResponse(event, { includeGallery: true, includeInactiveGallery: true }));
   } catch (error) {
     console.error('Error al obtener evento admin:', error.message || error);
     res.status(500).json({ error: 'Error al obtener evento admin' });
+  }
+};
+
+exports.getAdminEventGallery = async (req, res) => {
+  try {
+    const event = await findOwnedEvent(req.params.id, req.user.id);
+    if (!event) {
+      return res.status(404).json({ error: 'Evento no encontrado' });
+    }
+
+    res.json(await getGalleryRowsByEventId(req.params.id, { includeInactive: true }));
+  } catch (error) {
+    console.error('Error al obtener la galeria del evento:', error.message || error);
+    res.status(500).json({ error: 'Error al obtener la galeria del evento' });
   }
 };
 
@@ -324,8 +426,12 @@ exports.createAdminEvent = async (req, res) => {
       ]
     );
 
+    if (payload.images.length > 0) {
+      await replaceGalleryFromImageUrls(result.insertId, payload.images);
+    }
+
     const created = await findOwnedEvent(result.insertId, req.user.id);
-    res.status(201).json(normalizeEvent(created));
+    res.status(201).json(await buildEventResponse(created, { includeGallery: true, includeInactiveGallery: true }));
   } catch (error) {
     console.error('Error al crear el evento:', error.message || error);
     res.status(500).json({ error: 'Error al crear el evento' });
@@ -388,11 +494,151 @@ exports.updateAdminEvent = async (req, res) => {
       values
     );
 
+    if (req.body.images !== undefined || req.body.coverImage !== undefined) {
+      await replaceGalleryFromImageUrls(req.params.id, payload.images);
+    }
+
     const updated = await findOwnedEvent(req.params.id, req.user.id);
-    res.json(normalizeEvent(updated));
+    res.json(await buildEventResponse(updated, { includeGallery: true, includeInactiveGallery: true }));
   } catch (error) {
     console.error('Error al actualizar el evento:', error.message || error);
     res.status(500).json({ error: 'Error al actualizar el evento' });
+  }
+};
+
+exports.uploadAdminEventGalleryImages = async (req, res) => {
+  try {
+    const event = await findOwnedEvent(req.params.id, req.user.id);
+    if (!event) {
+      return res.status(404).json({ error: 'Evento no encontrado' });
+    }
+
+    if (!Array.isArray(req.files) || req.files.length === 0) {
+      return res.status(400).json({ error: 'Debes subir al menos una imagen valida' });
+    }
+
+    const [lastRows] = await pool.query(
+      'SELECT COALESCE(MAX(`order`), -1) as maxOrder FROM gallery WHERE eventId = ?',
+      [req.params.id]
+    );
+    let nextOrder = Number(lastRows[0]?.maxOrder ?? -1) + 1;
+
+    for (const file of req.files) {
+      const imageUrl = `/uploads/events/${file.filename}`;
+      await pool.query(
+        'INSERT INTO gallery (eventId, imageUrl, caption, `order`, isActive) VALUES (?, ?, NULL, ?, 1)',
+        [req.params.id, imageUrl, nextOrder]
+      );
+      nextOrder += 1;
+    }
+
+    await syncEventGallerySnapshot(req.params.id);
+    return sendGalleryMutationResponse(res, req.params.id, req.user.id);
+  } catch (error) {
+    console.error('Error al subir imagenes a la galeria:', error.message || error);
+    res.status(500).json({ error: 'Error al subir imagenes a la galeria' });
+  }
+};
+
+exports.reorderAdminEventGallery = async (req, res) => {
+  try {
+    const event = await findOwnedEvent(req.params.id, req.user.id);
+    if (!event) {
+      return res.status(404).json({ error: 'Evento no encontrado' });
+    }
+
+    if (!Array.isArray(req.body?.items) || req.body.items.length === 0) {
+      return res.status(400).json({ error: 'Debes enviar una lista valida para reordenar la galeria' });
+    }
+
+    const gallery = await getGalleryRowsByEventId(req.params.id, { includeInactive: true });
+    const galleryIds = new Set(gallery.map((item) => item.id));
+
+    for (const item of req.body.items) {
+      if (!galleryIds.has(Number(item.id))) {
+        return res.status(400).json({ error: 'La galeria contiene imagenes no asociadas a este evento' });
+      }
+    }
+
+    for (const item of req.body.items) {
+      await pool.query(
+        'UPDATE gallery SET `order` = ? WHERE id = ? AND eventId = ?',
+        [Number(item.order) || 0, Number(item.id), req.params.id]
+      );
+    }
+
+    await syncEventGallerySnapshot(req.params.id);
+    return sendGalleryMutationResponse(res, req.params.id, req.user.id);
+  } catch (error) {
+    console.error('Error al reordenar la galeria:', error.message || error);
+    res.status(500).json({ error: 'Error al reordenar la galeria' });
+  }
+};
+
+exports.updateAdminEventGalleryImage = async (req, res) => {
+  try {
+    const event = await findOwnedEvent(req.params.id, req.user.id);
+    if (!event) {
+      return res.status(404).json({ error: 'Evento no encontrado' });
+    }
+
+    const [rows] = await pool.query(
+      'SELECT id FROM gallery WHERE id = ? AND eventId = ? LIMIT 1',
+      [req.params.imageId, req.params.id]
+    );
+
+    if (rows.length === 0) {
+      return res.status(404).json({ error: 'Imagen no encontrada en la galeria' });
+    }
+
+    const updates = [];
+    const values = [];
+
+    if (req.body.caption !== undefined) {
+      updates.push('caption = ?');
+      values.push(String(req.body.caption || '').trim() || null);
+    }
+
+    if (req.body.isActive !== undefined) {
+      updates.push('isActive = ?');
+      values.push(toBoolean(req.body.isActive));
+    }
+
+    if (updates.length === 0) {
+      return res.status(400).json({ error: 'No hay cambios validos para esta imagen' });
+    }
+
+    values.push(req.params.imageId, req.params.id);
+    await pool.query(
+      `UPDATE gallery SET ${updates.join(', ')} WHERE id = ? AND eventId = ?`,
+      values
+    );
+
+    await syncEventGallerySnapshot(req.params.id);
+    return sendGalleryMutationResponse(res, req.params.id, req.user.id);
+  } catch (error) {
+    console.error('Error al actualizar la imagen de la galeria:', error.message || error);
+    res.status(500).json({ error: 'Error al actualizar la imagen de la galeria' });
+  }
+};
+
+exports.removeAdminEventGalleryImage = async (req, res) => {
+  try {
+    const event = await findOwnedEvent(req.params.id, req.user.id);
+    if (!event) {
+      return res.status(404).json({ error: 'Evento no encontrado' });
+    }
+
+    await pool.query(
+      'DELETE FROM gallery WHERE id = ? AND eventId = ?',
+      [req.params.imageId, req.params.id]
+    );
+
+    await syncEventGallerySnapshot(req.params.id);
+    return sendGalleryMutationResponse(res, req.params.id, req.user.id);
+  } catch (error) {
+    console.error('Error al eliminar la imagen de la galeria:', error.message || error);
+    res.status(500).json({ error: 'Error al eliminar la imagen de la galeria' });
   }
 };
 

@@ -2,12 +2,13 @@ import { Injectable } from '@angular/core';
 import { HttpClient, HttpParams } from '@angular/common/http';
 import { Observable } from 'rxjs';
 import { environment } from '../../../environments/environment';
-import { Evento, CreateEventoDto, UpdateEventoDto, DashboardStats } from '../models/event.model';
+import { Evento, CreateEventoDto, UpdateEventoDto, DashboardStats, GalleryImage, GalleryMutationResponse } from '../models/event.model';
 
 @Injectable({ providedIn: 'root' })
 export class EventoService {
   private adminApiUrl = `${environment.apiUrl}/admin/events`;
   private publicApiUrl = `${environment.apiUrl}/public/events`;
+  private assetsBaseUrl = environment.apiUrl.replace(/\/api$/, '');
 
   constructor(private http: HttpClient) {}
 
@@ -50,6 +51,47 @@ export class EventoService {
   togglePublish(id: number, isPublished: boolean): Observable<Evento> {
     const action = isPublished ? 'publish' : 'unpublish';
     return this.http.put<Evento>(`${this.adminApiUrl}/${id}/${action}`, {});
+  }
+
+  getEventGallery(id: number): Observable<GalleryImage[]> {
+    return this.http.get<GalleryImage[]>(`${this.adminApiUrl}/${id}/gallery`);
+  }
+
+  uploadEventImages(id: number, files: File[]): Observable<GalleryMutationResponse> {
+    const formData = new FormData();
+    for (const file of files) {
+      formData.append('images', file);
+    }
+
+    return this.http.post<GalleryMutationResponse>(`${this.adminApiUrl}/${id}/gallery/upload`, formData);
+  }
+
+  reorderEventGallery(id: number, items: Array<{ id: number; order: number }>): Observable<GalleryMutationResponse> {
+    return this.http.put<GalleryMutationResponse>(`${this.adminApiUrl}/${id}/gallery/reorder`, { items });
+  }
+
+  updateGalleryImage(
+    id: number,
+    imageId: number,
+    data: { caption?: string; isActive?: boolean }
+  ): Observable<GalleryMutationResponse> {
+    return this.http.put<GalleryMutationResponse>(`${this.adminApiUrl}/${id}/gallery/${imageId}`, data);
+  }
+
+  deleteGalleryImage(id: number, imageId: number): Observable<GalleryMutationResponse> {
+    return this.http.delete<GalleryMutationResponse>(`${this.adminApiUrl}/${id}/gallery/${imageId}`);
+  }
+
+  resolveAssetUrl(url?: string | null): string {
+    if (!url) {
+      return '';
+    }
+
+    if (/^https?:\/\//i.test(url)) {
+      return url;
+    }
+
+    return `${this.assetsBaseUrl}${url.startsWith('/') ? url : `/${url}`}`;
   }
 
   getAll(filters?: { category?: string; search?: string; page?: number }): Observable<Evento[]> {

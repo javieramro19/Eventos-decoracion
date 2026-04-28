@@ -51,6 +51,71 @@ const ensureUsersTable = async () => {
   `);
 };
 
+const ensureGalleryTable = async () => {
+  await db.query(`
+    CREATE TABLE IF NOT EXISTS gallery (
+      id INT AUTO_INCREMENT PRIMARY KEY,
+      eventId INT NOT NULL,
+      imageUrl VARCHAR(500) NOT NULL,
+      caption VARCHAR(255) NULL,
+      \`order\` INT NOT NULL DEFAULT 0,
+      isActive TINYINT(1) NOT NULL DEFAULT 1,
+      createdAt TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+      updatedAt TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+      CONSTRAINT fk_gallery_event FOREIGN KEY (eventId) REFERENCES events(id) ON DELETE CASCADE
+    )
+  `);
+
+  await ensureColumn('gallery', 'imageUrl', 'VARCHAR(500) NOT NULL');
+  await ensureColumn('gallery', 'caption', 'VARCHAR(255) NULL');
+  await ensureColumn('gallery', 'order', 'INT NOT NULL DEFAULT 0');
+  await ensureColumn('gallery', 'isActive', 'TINYINT(1) NOT NULL DEFAULT 1');
+  await ensureColumn('gallery', 'createdAt', 'TIMESTAMP DEFAULT CURRENT_TIMESTAMP');
+  await ensureColumn('gallery', 'updatedAt', 'TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP');
+  await ensureIndex('gallery', 'idx_gallery_event_order', 'CREATE INDEX idx_gallery_event_order ON gallery (eventId, `order`)');
+  await ensureIndex('gallery', 'idx_gallery_event_active', 'CREATE INDEX idx_gallery_event_active ON gallery (eventId, isActive)');
+};
+
+const backfillGalleryTable = async () => {
+  const [events] = await db.query('SELECT id, coverImage, imagesJson FROM events ORDER BY id ASC');
+
+  for (const event of events) {
+    const [[countRow]] = await db.query('SELECT COUNT(*) as total FROM gallery WHERE eventId = ?', [event.id]);
+    if (countRow.total > 0) {
+      continue;
+    }
+
+    const images = [];
+
+    if (event.coverImage) {
+      images.push(String(event.coverImage).trim());
+    }
+
+    if (event.imagesJson) {
+      try {
+        const parsed = JSON.parse(event.imagesJson);
+        if (Array.isArray(parsed)) {
+          for (const image of parsed) {
+            const clean = String(image || '').trim();
+            if (clean && !images.includes(clean)) {
+              images.push(clean);
+            }
+          }
+        }
+      } catch {
+        // Ignore malformed legacy gallery snapshots.
+      }
+    }
+
+    for (const [index, imageUrl] of images.entries()) {
+      await db.query(
+        'INSERT INTO gallery (eventId, imageUrl, caption, `order`, isActive) VALUES (?, ?, NULL, ?, 1)',
+        [event.id, imageUrl, index]
+      );
+    }
+  }
+};
+
 const ensureEventsTable = async () => {
   await db.query(`
     CREATE TABLE IF NOT EXISTS events (
@@ -112,6 +177,8 @@ const ensureEventsTable = async () => {
 const initDatabase = async () => {
   await ensureUsersTable();
   await ensureEventsTable();
+  await ensureGalleryTable();
+  await backfillGalleryTable();
 };
 
 module.exports = { initDatabase };

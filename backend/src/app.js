@@ -51,6 +51,8 @@ if (shouldLogRequests) {
 
 app.use('/api/auth', require('./routes/auth.routes'));
 app.use('/api/events', require('./routes/events.routes'));
+app.use('/api/admin/events', require('./routes/admin-events.routes'));
+app.use('/api/public/events', require('./routes/public-events.routes'));
 
 app.get('/api/health', async (req, res) => {
   try {

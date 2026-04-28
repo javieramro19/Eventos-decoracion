@@ -2,13 +2,15 @@ export interface Evento {
   id: number;
   userId: number;
   title: string;
+  slug: string;
   description?: string;
   status?: string;
   category?: string;
   eventDate?: string;
   location?: string;
-  isPublished?: boolean;
+  isPublished: boolean;
   coverImage?: string;
+  images?: string[];
   planId?: string;
   planName?: string;
   planSummary?: string;
@@ -31,11 +33,15 @@ export interface PlanSelectionExtra {
 
 export interface CreateEventoDto {
   title: string;
+  slug?: string;
   description?: string;
   status?: string;
   category?: string;
   eventDate?: string;
   location?: string;
+  isPublished?: boolean;
+  coverImage?: string;
+  images?: string[];
   planId?: string;
   planName?: string;
   planSummary?: string;

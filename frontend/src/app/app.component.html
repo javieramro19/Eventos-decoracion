@@ -8,13 +8,14 @@
       <nav class="nav-links">
         <a routerLink="/" fragment="inicio">Inicio</a>
         <a routerLink="/" fragment="planes">Planes</a>
-        <a *ngIf="authService.isAuthenticated()" routerLink="/dashboard" routerLinkActive="active">Panel</a>
-        <a *ngIf="authService.isAuthenticated()" routerLink="/events" routerLinkActive="active">Eventos</a>
+        <a routerLink="/eventos" routerLinkActive="active">Eventos</a>
+        <a *ngIf="authService.isAuthenticated()" routerLink="/admin/events" routerLinkActive="active">Panel Admin</a>
+        <a *ngIf="authService.isAuthenticated()" routerLink="/admin/events" routerLinkActive="active">Mis Eventos</a>
       </nav>
 
       <div class="user-block">
         <a *ngIf="!authService.isAuthenticated()" class="cta-link" routerLink="/auth/login">Iniciar sesion / Crear cuenta</a>
-        <a *ngIf="authService.isAuthenticated()" class="cta-link" routerLink="/" fragment="planes">Elegir plan</a>
+        <a *ngIf="authService.isAuthenticated()" class="cta-link" routerLink="/admin/events/new">Nuevo evento</a>
         <button *ngIf="authService.isAuthenticated()" class="logout" type="button" (click)="authService.logout()">Cerrar sesion</button>
       </div>
     </div>

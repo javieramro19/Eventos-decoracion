@@ -7,6 +7,19 @@ export const routes: Routes = [
     loadComponent: () => import('./features/landing/landing.component').then(m => m.LandingComponent),
   },
   {
+    path: 'eventos',
+    children: [
+      {
+        path: '',
+        loadComponent: () => import('./features/public/events-gallery/events-gallery.component').then(m => m.PublicEventsGalleryComponent),
+      },
+      {
+        path: ':slug',
+        loadComponent: () => import('./features/public/event-detail/event-detail.component').then(m => m.PublicEventDetailComponent),
+      },
+    ],
+  },
+  {
     path: 'auth',
     children: [
       {
@@ -29,26 +42,26 @@ export const routes: Routes = [
     loadComponent: () => import('./features/dashboard/dashboard.component').then(m => m.DashboardComponent),
   },
   {
-    path: 'events',
+    path: 'admin',
     canActivate: [authGuard],
     children: [
       {
-        path: '',
-        loadComponent: () => import('./features/events/events-list/events-list.component').then(m => m.EventoListComponent),
+        path: 'events',
+        loadComponent: () => import('./features/admin/events-list/admin-events-list.component').then(m => m.AdminEventsListComponent),
       },
       {
-        path: 'new',
-        loadComponent: () => import('./features/events/events-form/events-form.component').then(m => m.EventoFormComponent),
+        path: 'events/new',
+        loadComponent: () => import('./features/admin/events-form/admin-events-form.component').then(m => m.AdminEventsFormComponent),
       },
       {
-        path: ':id/edit',
-        loadComponent: () => import('./features/events/events-form/events-form.component').then(m => m.EventoFormComponent),
-      },
-      {
-        path: ':id',
-        loadComponent: () => import('./features/events/events-detail/events-detail.component').then(m => m.EventoDetailComponent),
+        path: 'events/:id/edit',
+        loadComponent: () => import('./features/admin/events-form/admin-events-form.component').then(m => m.AdminEventsFormComponent),
       },
     ],
   },
+  { path: 'events', pathMatch: 'full', redirectTo: 'admin/events' },
+  { path: 'events/new', pathMatch: 'full', redirectTo: 'admin/events/new' },
+  { path: 'events/:id/edit', redirectTo: 'admin/events/:id/edit' },
+  { path: 'events/:id', redirectTo: 'admin/events/:id/edit' },
   { path: '**', redirectTo: '' },
 ];

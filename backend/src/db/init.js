@@ -103,6 +103,31 @@ const ensureContactsTable = async () => {
   await ensureIndex('contacts', 'idx_contacts_status_created', 'CREATE INDEX idx_contacts_status_created ON contacts (status, createdAt)');
 };
 
+const ensureSectionsTable = async () => {
+  await db.query(`
+    CREATE TABLE IF NOT EXISTS sections (
+      id INT AUTO_INCREMENT PRIMARY KEY,
+      eventId INT NOT NULL,
+      type VARCHAR(40) NOT NULL,
+      content JSON NULL,
+      isActive TINYINT(1) NOT NULL DEFAULT 1,
+      \`order\` INT NOT NULL DEFAULT 0,
+      createdAt TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+      updatedAt TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+      CONSTRAINT fk_sections_event FOREIGN KEY (eventId) REFERENCES events(id) ON DELETE CASCADE
+    )
+  `);
+
+  await ensureColumn('sections', 'type', 'VARCHAR(40) NOT NULL');
+  await ensureColumn('sections', 'content', 'JSON NULL');
+  await ensureColumn('sections', 'isActive', 'TINYINT(1) NOT NULL DEFAULT 1');
+  await ensureColumn('sections', 'order', 'INT NOT NULL DEFAULT 0');
+  await ensureColumn('sections', 'createdAt', 'TIMESTAMP DEFAULT CURRENT_TIMESTAMP');
+  await ensureColumn('sections', 'updatedAt', 'TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP');
+  await ensureIndex('sections', 'idx_sections_event_order', 'CREATE INDEX idx_sections_event_order ON sections (eventId, `order`)');
+  await ensureIndex('sections', 'idx_sections_event_type', 'CREATE INDEX idx_sections_event_type ON sections (eventId, type)');
+};
+
 const backfillGalleryTable = async () => {
   const [events] = await db.query('SELECT id, coverImage, imagesJson FROM events ORDER BY id ASC');
 
@@ -138,6 +163,72 @@ const backfillGalleryTable = async () => {
       await db.query(
         'INSERT INTO gallery (eventId, imageUrl, caption, `order`, isActive) VALUES (?, ?, NULL, ?, 1)',
         [event.id, imageUrl, index]
+      );
+    }
+  }
+};
+
+const backfillSectionsTable = async () => {
+  const [events] = await db.query(`
+    SELECT id, title, description, planName, planSummary
+    FROM events
+    ORDER BY id ASC
+  `);
+
+  for (const event of events) {
+    const [[countRow]] = await db.query('SELECT COUNT(*) as total FROM sections WHERE eventId = ?', [event.id]);
+    if (countRow.total > 0) {
+      continue;
+    }
+
+    const sections = [
+      {
+        type: 'hero',
+        content: JSON.stringify({
+          eyebrow: 'Evento publicado',
+          title: event.title,
+          summary: event.description || '',
+        }),
+        isActive: 1,
+        order: 0,
+      },
+      {
+        type: 'gallery',
+        content: JSON.stringify({
+          heading: 'Galeria del evento',
+          description: 'Una seleccion visual del montaje, la ambientacion y los detalles del evento.',
+        }),
+        isActive: 1,
+        order: 1,
+      },
+      {
+        type: 'about',
+        content: JSON.stringify({
+          heading: 'La propuesta',
+          body: event.description || '',
+          planHeading: event.planName || 'Plan EventoSonic',
+          planSummary: event.planSummary || '',
+        }),
+        isActive: 1,
+        order: 2,
+      },
+      {
+        type: 'contact',
+        content: JSON.stringify({
+          eyebrow: 'Solicitar informacion',
+          heading: '¿Te interesa este montaje?',
+          body: 'Envia tu solicitud y la guardaremos directamente en el panel de administracion del evento.',
+          ctaLabel: 'Enviar solicitud',
+        }),
+        isActive: 1,
+        order: 3,
+      },
+    ];
+
+    for (const section of sections) {
+      await db.query(
+        'INSERT INTO sections (eventId, type, content, isActive, `order`) VALUES (?, ?, ?, ?, ?)',
+        [event.id, section.type, section.content, section.isActive, section.order]
       );
     }
   }
@@ -206,7 +297,9 @@ const initDatabase = async () => {
   await ensureEventsTable();
   await ensureGalleryTable();
   await ensureContactsTable();
+  await ensureSectionsTable();
   await backfillGalleryTable();
+  await backfillSectionsTable();
 };
 
 module.exports = { initDatabase };

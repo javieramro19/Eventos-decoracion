@@ -5,7 +5,7 @@ import { ActivatedRoute, Router, RouterModule } from '@angular/router';
 import { CdkDragDrop, DragDropModule, moveItemInArray } from '@angular/cdk/drag-drop';
 import { MatButtonModule } from '@angular/material/button';
 import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
-import { Evento, GalleryImage } from '../../../core/models/event.model';
+import { EventSection, EventSectionContent, Evento, GalleryImage } from '../../../core/models/event.model';
 import { EventoService } from '../../../core/services/events.service';
 
 @Component({
@@ -159,6 +159,98 @@ import { EventoService } from '../../../core/services/events.service';
         </div>
       </section>
 
+      <section class="gallery-card" *ngIf="isEditing">
+        <div class="gallery-head">
+          <div>
+            <span class="eyebrow">Secciones publicas</span>
+            <h2>Bloques configurables</h2>
+            <p>Activa, desactiva y reordena la narrativa publica del evento. La vista publica solo mostrara las secciones activas.</p>
+          </div>
+        </div>
+
+        <p *ngIf="sectionsMessage()" class="gallery-message">{{ sectionsMessage() }}</p>
+
+        <div *ngIf="sections().length === 0" class="gallery-empty">
+          <div class="ui-mark">ES</div>
+          <p>No hay secciones cargadas todavia. Recarga el evento para inicializar la estructura publica.</p>
+        </div>
+
+        <div
+          *ngIf="sections().length > 0"
+          cdkDropList
+          class="gallery-grid"
+          (cdkDropListDropped)="onSectionsDrop($event)"
+        >
+          <article *ngFor="let section of sections(); trackBy: trackBySectionId" cdkDrag class="gallery-item" [class.gallery-item--inactive]="!section.isActive">
+            <div class="section-summary">
+              <button type="button" cdkDragHandle class="drag-handle drag-handle--inline" aria-label="Reordenar seccion">::</button>
+              <span class="status-chip" [class.status-chip--inactive]="!section.isActive">
+                {{ section.isActive ? 'Activa' : 'Oculta' }}
+              </span>
+              <strong>{{ sectionLabel(section.type) }}</strong>
+              <p>{{ sectionDescription(section.type) }}</p>
+            </div>
+
+            <div class="gallery-item__body">
+              <div class="gallery-item__controls">
+                <label class="switch">
+                  <input type="checkbox" [checked]="section.isActive" (change)="toggleSection(section, $any($event.target).checked)" [disabled]="busySectionIds().includes(section.id)">
+                  <span class="switch-ui"></span>
+                  <span>{{ section.isActive ? 'Visible' : 'Oculta' }}</span>
+                </label>
+              </div>
+
+              <div class="grid-two grid-two--tight">
+                <label class="sonic-field" *ngIf="showSectionField(section.type, 'eyebrow')">
+                  <span>Eyebrow</span>
+                  <input [value]="section.content.eyebrow || ''" (blur)="updateSectionContent(section, 'eyebrow', $any($event.target).value)">
+                </label>
+
+                <label class="sonic-field" *ngIf="showSectionField(section.type, 'title')">
+                  <span>Titulo</span>
+                  <input [value]="section.content.title || ''" (blur)="updateSectionContent(section, 'title', $any($event.target).value)">
+                </label>
+
+                <label class="sonic-field" *ngIf="showSectionField(section.type, 'heading')">
+                  <span>Heading</span>
+                  <input [value]="section.content.heading || ''" (blur)="updateSectionContent(section, 'heading', $any($event.target).value)">
+                </label>
+
+                <label class="sonic-field" *ngIf="showSectionField(section.type, 'planHeading')">
+                  <span>Titulo del plan</span>
+                  <input [value]="section.content.planHeading || ''" (blur)="updateSectionContent(section, 'planHeading', $any($event.target).value)">
+                </label>
+
+                <label class="sonic-field" *ngIf="showSectionField(section.type, 'ctaLabel')">
+                  <span>Texto CTA</span>
+                  <input [value]="section.content.ctaLabel || ''" (blur)="updateSectionContent(section, 'ctaLabel', $any($event.target).value)">
+                </label>
+              </div>
+
+              <label class="sonic-field" *ngIf="showSectionField(section.type, 'summary')">
+                <span>Resumen</span>
+                <textarea rows="3" (blur)="updateSectionContent(section, 'summary', $any($event.target).value)">{{ section.content.summary || '' }}</textarea>
+              </label>
+
+              <label class="sonic-field" *ngIf="showSectionField(section.type, 'description')">
+                <span>Descripcion</span>
+                <textarea rows="3" (blur)="updateSectionContent(section, 'description', $any($event.target).value)">{{ section.content.description || '' }}</textarea>
+              </label>
+
+              <label class="sonic-field" *ngIf="showSectionField(section.type, 'body')">
+                <span>Cuerpo</span>
+                <textarea rows="4" (blur)="updateSectionContent(section, 'body', $any($event.target).value)">{{ section.content.body || '' }}</textarea>
+              </label>
+
+              <label class="sonic-field" *ngIf="showSectionField(section.type, 'planSummary')">
+                <span>Resumen del plan</span>
+                <textarea rows="3" (blur)="updateSectionContent(section, 'planSummary', $any($event.target).value)">{{ section.content.planSummary || '' }}</textarea>
+              </label>
+            </div>
+          </article>
+        </div>
+      </section>
+
       <ng-template #saveFirstTpl>
         <section class="gallery-card gallery-card--muted">
           <span class="eyebrow">Galeria</span>
@@ -221,6 +313,9 @@ import { EventoService } from '../../../core/services/events.service';
         display: grid;
         grid-template-columns: repeat(2, minmax(0, 1fr));
         gap: 1rem;
+      }
+      .grid-two--tight {
+        gap: 0.75rem;
       }
       .publish-box {
         display: flex;
@@ -333,6 +428,9 @@ import { EventoService } from '../../../core/services/events.service';
         font-weight: 900;
         letter-spacing: 0.1em;
       }
+      .drag-handle--inline {
+        position: static;
+      }
       .status-chip {
         position: absolute;
         right: 0.8rem;
@@ -353,6 +451,25 @@ import { EventoService } from '../../../core/services/events.service';
         display: grid;
         gap: 1rem;
         align-content: start;
+      }
+      .section-summary {
+        position: relative;
+        display: grid;
+        align-content: start;
+        gap: 0.6rem;
+        min-height: 220px;
+        padding: 1rem;
+        border-radius: 22px;
+        background:
+          radial-gradient(circle at top left, rgba(212, 175, 122, 0.25), transparent 36%),
+          linear-gradient(180deg, #fffaf3 0%, #f4eadf 100%);
+      }
+      .section-summary strong {
+        margin-top: 2.8rem;
+        font-size: 1.15rem;
+      }
+      .section-summary p {
+        margin: 0;
       }
       .gallery-item__controls {
         display: flex;
@@ -437,6 +554,9 @@ export class AdminEventsFormComponent implements OnInit {
   galleryMessage = signal('');
   gallery = signal<GalleryImage[]>([]);
   busyGalleryIds = signal<number[]>([]);
+  sections = signal<EventSection[]>([]);
+  sectionsMessage = signal('');
+  busySectionIds = signal<number[]>([]);
   currentEvent = signal<Evento | null>(null);
   isEditing = false;
   itemId?: number;
@@ -462,6 +582,7 @@ export class AdminEventsFormComponent implements OnInit {
     this.eventsService.getAdminEventById(eventId).subscribe((item) => {
       this.currentEvent.set(item);
       this.gallery.set(item.gallery || []);
+      this.sections.set((item.sections || []).slice().sort((left, right) => left.order - right.order));
       this.form.patchValue({
         title: item.title,
         category: item.category || 'other',
@@ -504,6 +625,7 @@ export class AdminEventsFormComponent implements OnInit {
       next: (event) => {
         this.currentEvent.set(event);
         this.gallery.set(event.gallery || []);
+        this.sections.set((event.sections || []).slice().sort((left, right) => left.order - right.order));
         this.router.navigate(['/admin/events', event.id, 'edit']);
       },
       error: () => this.saving.set(false),
@@ -614,8 +736,119 @@ export class AdminEventsFormComponent implements OnInit {
     return image.id;
   }
 
+  trackBySectionId(_index: number, section: EventSection): number {
+    return section.id;
+  }
+
   getImageStyle(url: string): string {
     return `url('${this.eventsService.resolveAssetUrl(url)}')`;
+  }
+
+  onSectionsDrop(event: CdkDragDrop<EventSection[]>): void {
+    if (!this.itemId || event.previousIndex === event.currentIndex) {
+      return;
+    }
+
+    const reordered = [...this.sections()];
+    moveItemInArray(reordered, event.previousIndex, event.currentIndex);
+    this.sections.set(reordered.map((section, index) => ({ ...section, order: index })));
+
+    this.eventsService.reorderEventSections(
+      this.itemId,
+      this.sections().map((section, index) => ({ id: section.id, order: index }))
+    ).subscribe({
+      next: (sections) => {
+        this.sections.set(sections);
+        this.sectionsMessage.set('Orden de secciones actualizado.');
+      },
+      error: () => {
+        this.sectionsMessage.set('No se pudo guardar el nuevo orden de las secciones.');
+        this.loadEvent(this.itemId!);
+      },
+    });
+  }
+
+  toggleSection(section: EventSection, isActive: boolean): void {
+    if (!this.itemId) {
+      return;
+    }
+
+    this.markSectionBusy(section.id, true);
+    this.eventsService.updateEventSection(this.itemId, section.id, { isActive }).subscribe({
+      next: (updated) => {
+        this.replaceSection(updated);
+        this.sectionsMessage.set(`Seccion ${this.sectionLabel(section.type).toLowerCase()} actualizada.`);
+        this.markSectionBusy(section.id, false);
+      },
+      error: () => this.markSectionBusy(section.id, false),
+    });
+  }
+
+  updateSectionContent(section: EventSection, key: keyof EventSectionContent, value: string): void {
+    if (!this.itemId) {
+      return;
+    }
+
+    const trimmedValue = value.trim();
+    if ((section.content[key] || '') === trimmedValue) {
+      return;
+    }
+
+    const content: EventSectionContent = {
+      ...section.content,
+      [key]: trimmedValue,
+    };
+
+    this.markSectionBusy(section.id, true);
+    this.eventsService.updateEventSection(this.itemId, section.id, { content }).subscribe({
+      next: (updated) => {
+        this.replaceSection(updated);
+        this.sectionsMessage.set(`Contenido de ${this.sectionLabel(section.type).toLowerCase()} guardado.`);
+        this.markSectionBusy(section.id, false);
+      },
+      error: () => this.markSectionBusy(section.id, false),
+    });
+  }
+
+  sectionLabel(type: EventSection['type']): string {
+    switch (type) {
+      case 'hero':
+        return 'Hero';
+      case 'gallery':
+        return 'Galeria';
+      case 'about':
+        return 'Sobre el evento';
+      case 'contact':
+        return 'Contacto';
+      default:
+        return type;
+    }
+  }
+
+  sectionDescription(type: EventSection['type']): string {
+    switch (type) {
+      case 'hero':
+        return 'Portada principal con mensaje y contexto del evento.';
+      case 'gallery':
+        return 'Bloque visual para las imagenes destacadas del montaje.';
+      case 'about':
+        return 'Narrativa y detalle del plan, propuesta y extras.';
+      case 'contact':
+        return 'Formulario y llamada a la accion comercial.';
+      default:
+        return 'Bloque configurable del evento.';
+    }
+  }
+
+  showSectionField(type: EventSection['type'], field: keyof EventSectionContent): boolean {
+    const visibleFields: Record<EventSection['type'], Array<keyof EventSectionContent>> = {
+      hero: ['eyebrow', 'title', 'summary'],
+      gallery: ['heading', 'description'],
+      about: ['heading', 'body', 'planHeading', 'planSummary'],
+      contact: ['eyebrow', 'heading', 'body', 'ctaLabel'],
+    };
+
+    return visibleFields[type].includes(field);
   }
 
   private markGalleryBusy(imageId: number, busy: boolean): void {
@@ -625,6 +858,23 @@ export class AdminEventsFormComponent implements OnInit {
     }
 
     this.busyGalleryIds.update((ids) => ids.filter((id) => id !== imageId));
+  }
+
+  private markSectionBusy(sectionId: number, busy: boolean): void {
+    if (busy) {
+      this.busySectionIds.update((ids) => Array.from(new Set([...ids, sectionId])));
+      return;
+    }
+
+    this.busySectionIds.update((ids) => ids.filter((id) => id !== sectionId));
+  }
+
+  private replaceSection(updated: EventSection): void {
+    this.sections.update((sections) =>
+      sections
+        .map((section) => (section.id === updated.id ? updated : section))
+        .sort((left, right) => left.order - right.order)
+    );
   }
 
   private generateSlug(value: string): string {

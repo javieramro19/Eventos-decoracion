@@ -4,7 +4,7 @@ import { FormBuilder, ReactiveFormsModule, Validators } from '@angular/forms';
 import { ActivatedRoute, Router, RouterModule } from '@angular/router';
 import { MatButtonModule } from '@angular/material/button';
 import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
-import { Evento } from '../../../core/models/event.model';
+import { EventSection, Evento } from '../../../core/models/event.model';
 import { EventoService } from '../../../core/services/events.service';
 
 @Component({
@@ -19,42 +19,29 @@ import { EventoService } from '../../../core/services/events.service';
       </div>
 
       <ng-container *ngIf="!loading() && item() as event">
-        <section class="hero">
-          <div class="hero-copy">
-            <span class="eyebrow">Evento publicado</span>
-            <h1>{{ event.title }}</h1>
-            <p>{{ event.description || 'Este evento forma parte del portfolio publico de EventoSonic.' }}</p>
-            <div class="hero-meta">
-              <span>{{ formatEventDate(event.eventDate) }}</span>
-              <span *ngIf="event.planName">{{ event.planName }}</span>
-              <span *ngIf="event.location">{{ event.location }}</span>
-            </div>
-          </div>
-          <a mat-raised-button color="primary" routerLink="/" fragment="contacto">Solicitar presupuesto general</a>
-        </section>
-
-        <section class="content-grid">
-          <article class="story-card">
-            <h2>La propuesta</h2>
-            <p>{{ event.description || 'Sin descripcion ampliada.' }}</p>
-
-            <div *ngIf="event.planSummary" class="plan-card">
-              <span class="eyebrow">Plan contratado</span>
-              <h3>{{ event.planName || 'Plan EventoSonic' }}</h3>
-              <p>{{ event.planSummary }}</p>
-              <strong *ngIf="event.totalPrice">{{ event.totalPrice | currency:'EUR':'symbol':'1.0-0' }}</strong>
-            </div>
-
-            <div *ngIf="event.selectedExtras?.length" class="extras-card">
-              <h3>Extras incluidos</h3>
-              <div class="extra-row" *ngFor="let extra of event.selectedExtras">
-                <span>{{ extra.name }}</span>
-                <strong>{{ extra.price | currency:'EUR':'symbol':'1.0-0' }}</strong>
+        <ng-container *ngFor="let section of activeSections(event)">
+          <section *ngIf="section.type === 'hero'" class="hero">
+            <div class="hero-copy">
+              <span class="eyebrow">{{ section.content.eyebrow || 'Evento publicado' }}</span>
+              <h1>{{ section.content.title || event.title }}</h1>
+              <p>{{ section.content.summary || event.description || 'Este evento forma parte del portfolio publico de EventoSonic.' }}</p>
+              <div class="hero-meta">
+                <span>{{ formatEventDate(event.eventDate) }}</span>
+                <span *ngIf="event.planName">{{ event.planName }}</span>
+                <span *ngIf="event.location">{{ event.location }}</span>
               </div>
             </div>
-          </article>
+            <a mat-raised-button color="primary" routerLink="/" fragment="contacto">Solicitar presupuesto general</a>
+          </section>
 
-          <article class="gallery-card">
+          <section *ngIf="section.type === 'gallery'" class="gallery-card section-block">
+            <div class="section-heading">
+              <div>
+                <span class="eyebrow">Galeria</span>
+                <h2>{{ section.content.heading || 'Galeria del evento' }}</h2>
+                <p>{{ section.content.description || 'Una seleccion visual del montaje, la ambientacion y los detalles del evento.' }}</p>
+              </div>
+            </div>
             <div class="main-image" [style.background-image]="selectedImage() ? 'url(' + selectedImage() + ')' : getCoverStyle(event)"></div>
             <div class="thumb-grid" *ngIf="galleryImages(event).length > 0">
               <button type="button" *ngFor="let image of galleryImages(event)" class="thumb-button" (click)="updateSelectedImage(event, image)">
@@ -62,52 +49,82 @@ import { EventoService } from '../../../core/services/events.service';
               </button>
             </div>
             <p *ngIf="selectedCaption()" class="caption-note">{{ selectedCaption() }}</p>
-            <a mat-stroked-button routerLink="/eventos">Volver a eventos</a>
-          </article>
-        </section>
+          </section>
 
-        <section class="contact-card">
-          <div class="contact-head">
-            <div>
-              <span class="eyebrow">Solicitar informacion</span>
-              <h2>¿Te interesa este montaje?</h2>
-              <p>Envia tu solicitud y la guardaremos directamente en el panel de administracion del evento.</p>
+          <section *ngIf="section.type === 'about'" class="content-grid">
+            <article class="story-card">
+              <h2>{{ section.content.heading || 'La propuesta' }}</h2>
+              <p>{{ section.content.body || event.description || 'Sin descripcion ampliada.' }}</p>
+
+              <div *ngIf="event.planSummary || section.content.planSummary" class="plan-card">
+                <span class="eyebrow">Plan contratado</span>
+                <h3>{{ section.content.planHeading || event.planName || 'Plan EventoSonic' }}</h3>
+                <p>{{ section.content.planSummary || event.planSummary }}</p>
+                <strong *ngIf="event.totalPrice">{{ event.totalPrice | currency:'EUR':'symbol':'1.0-0' }}</strong>
+              </div>
+
+              <div *ngIf="event.selectedExtras?.length" class="extras-card">
+                <h3>Extras incluidos</h3>
+                <div class="extra-row" *ngFor="let extra of event.selectedExtras">
+                  <span>{{ extra.name }}</span>
+                  <strong>{{ extra.price | currency:'EUR':'symbol':'1.0-0' }}</strong>
+                </div>
+              </div>
+            </article>
+
+            <article class="gallery-card gallery-card--secondary">
+              <div class="section-mini-card">
+                <span class="eyebrow">Resumen visual</span>
+                <h3>{{ event.planName || event.title }}</h3>
+                <p>{{ section.content.body || event.description || 'Montaje cuidado hasta el ultimo detalle.' }}</p>
+                <a mat-stroked-button routerLink="/eventos">Volver a eventos</a>
+              </div>
+            </article>
+          </section>
+
+          <section *ngIf="section.type === 'contact'" class="contact-card">
+            <div class="contact-head">
+              <div>
+                <span class="eyebrow">{{ section.content.eyebrow || 'Solicitar informacion' }}</span>
+                <h2>{{ section.content.heading || 'Te interesa este montaje?' }}</h2>
+                <p>{{ section.content.body || 'Envia tu solicitud y la guardaremos directamente en el panel de administracion del evento.' }}</p>
+              </div>
             </div>
-          </div>
 
-          <form [formGroup]="contactForm" (ngSubmit)="submitContact()">
-            <div class="grid-two">
-              <div class="sonic-field">
-                <label for="contact-name">Nombre</label>
-                <input id="contact-name" formControlName="name" placeholder="Tu nombre">
+            <form [formGroup]="contactForm" (ngSubmit)="submitContact()">
+              <div class="grid-two">
+                <div class="sonic-field">
+                  <label for="contact-name">Nombre</label>
+                  <input id="contact-name" formControlName="name" placeholder="Tu nombre">
+                </div>
+
+                <div class="sonic-field">
+                  <label for="contact-email">Email</label>
+                  <input id="contact-email" formControlName="email" type="email" placeholder="cliente@evento.com">
+                </div>
+
+                <div class="sonic-field">
+                  <label for="contact-phone">Telefono</label>
+                  <input id="contact-phone" formControlName="phone" placeholder="+34 600 000 000">
+                </div>
               </div>
 
               <div class="sonic-field">
-                <label for="contact-email">Email</label>
-                <input id="contact-email" formControlName="email" type="email" placeholder="cliente@evento.com">
+                <label for="contact-message">Mensaje</label>
+                <textarea id="contact-message" formControlName="message" rows="5" placeholder="Cuentanos que necesitas, fecha estimada y estilo del evento."></textarea>
               </div>
 
-              <div class="sonic-field">
-                <label for="contact-phone">Telefono</label>
-                <input id="contact-phone" formControlName="phone" placeholder="+34 600 000 000">
+              <p *ngIf="contactError()" class="error-text">{{ contactError() }}</p>
+              <p *ngIf="contactSuccess()" class="success-text">{{ contactSuccess() }}</p>
+
+              <div class="contact-actions">
+                <button mat-raised-button color="primary" type="submit" [disabled]="contactForm.invalid || sendingContact()">
+                  {{ sendingContact() ? 'Enviando...' : section.content.ctaLabel || 'Enviar solicitud' }}
+                </button>
               </div>
-            </div>
-
-            <div class="sonic-field">
-              <label for="contact-message">Mensaje</label>
-              <textarea id="contact-message" formControlName="message" rows="5" placeholder="Cuéntanos qué necesitas, fecha estimada y estilo del evento."></textarea>
-            </div>
-
-            <p *ngIf="contactError()" class="error-text">{{ contactError() }}</p>
-            <p *ngIf="contactSuccess()" class="success-text">{{ contactSuccess() }}</p>
-
-            <div class="contact-actions">
-              <button mat-raised-button color="primary" type="submit" [disabled]="contactForm.invalid || sendingContact()">
-                {{ sendingContact() ? 'Enviando...' : 'Enviar solicitud' }}
-              </button>
-            </div>
-          </form>
-        </section>
+            </form>
+          </section>
+        </ng-container>
       </ng-container>
     </div>
   `,
@@ -141,6 +158,11 @@ import { EventoService } from '../../../core/services/events.service';
           linear-gradient(120deg, rgba(30, 26, 20, 0.8), rgba(30, 26, 20, 0.42)),
           radial-gradient(circle at top right, rgba(212, 175, 122, 0.28), transparent 26%);
         color: #fffaf6;
+      }
+      .section-block,
+      .contact-card {
+        padding: 1.5rem;
+        background: rgba(255, 255, 255, 0.88);
       }
       h1, h2, h3 {
         margin: 0;
@@ -179,14 +201,22 @@ import { EventoService } from '../../../core/services/events.service';
         border-radius: 999px;
         background: rgba(255, 250, 245, 0.14);
       }
+      .section-heading {
+        margin-bottom: 1rem;
+      }
+      .section-heading p,
+      .contact-head p,
+      .caption-note,
+      .section-mini-card p {
+        color: var(--text-soft);
+      }
       .content-grid {
         display: grid;
-        grid-template-columns: minmax(0, 1fr) minmax(360px, 0.95fr);
+        grid-template-columns: minmax(0, 1fr) minmax(320px, 0.9fr);
         gap: 1rem;
       }
       .story-card,
-      .gallery-card,
-      .contact-card {
+      .gallery-card--secondary {
         padding: 1.5rem;
         background: rgba(255, 255, 255, 0.88);
       }
@@ -218,6 +248,12 @@ import { EventoService } from '../../../core/services/events.service';
       .extra-row:last-child {
         border-bottom: 0;
       }
+      .section-mini-card {
+        display: grid;
+        gap: 0.8rem;
+        min-height: 100%;
+        align-content: start;
+      }
       .main-image {
         min-height: 420px;
         border-radius: 26px;
@@ -243,10 +279,6 @@ import { EventoService } from '../../../core/services/events.service';
         border-radius: 18px;
         background-size: cover;
         background-position: center;
-      }
-      .contact-head p,
-      .caption-note {
-        color: var(--text-soft);
       }
       form {
         display: grid;
@@ -337,6 +369,49 @@ export class PublicEventDetailComponent implements OnInit {
         this.router.navigate(['/eventos']);
       },
     });
+  }
+
+  activeSections(event: Evento): EventSection[] {
+    const sections = (event.sections || []).filter((section) => section.isActive).sort((left, right) => left.order - right.order);
+
+    if (sections.length > 0) {
+      return sections;
+    }
+
+    return [
+      {
+        id: -1,
+        eventId: event.id,
+        type: 'hero',
+        content: {},
+        isActive: true,
+        order: 0,
+      },
+      {
+        id: -2,
+        eventId: event.id,
+        type: 'gallery',
+        content: {},
+        isActive: true,
+        order: 1,
+      },
+      {
+        id: -3,
+        eventId: event.id,
+        type: 'about',
+        content: {},
+        isActive: true,
+        order: 2,
+      },
+      {
+        id: -4,
+        eventId: event.id,
+        type: 'contact',
+        content: {},
+        isActive: true,
+        order: 3,
+      },
+    ];
   }
 
   submitContact(): void {

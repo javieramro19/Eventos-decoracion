@@ -9,9 +9,12 @@ import {
   DashboardStats,
   GalleryImage,
   GalleryMutationResponse,
+  EventSection,
+  EventSectionContent,
   EventContact,
   CreateEventContactDto,
   ContactStatus,
+  SectionReorderItem,
 } from '../models/event.model';
 
 @Injectable({ providedIn: 'root' })
@@ -73,6 +76,22 @@ export class EventoService {
 
   getAdminEventContacts(id: number): Observable<EventContact[]> {
     return this.http.get<EventContact[]>(`${this.adminApiUrl}/${id}/contacts`);
+  }
+
+  getAdminEventSections(id: number): Observable<EventSection[]> {
+    return this.http.get<EventSection[]>(`${this.adminApiUrl}/${id}/sections`);
+  }
+
+  reorderEventSections(id: number, items: SectionReorderItem[]): Observable<EventSection[]> {
+    return this.http.put<EventSection[]>(`${this.adminApiUrl}/${id}/sections/reorder`, { items });
+  }
+
+  updateEventSection(
+    id: number,
+    sectionId: number,
+    data: { isActive?: boolean; content?: EventSectionContent }
+  ): Observable<EventSection> {
+    return this.http.put<EventSection>(`${this.adminApiUrl}/${id}/sections/${sectionId}`, data);
   }
 
   updateAdminContactStatus(contactId: number, status: ContactStatus): Observable<EventContact> {

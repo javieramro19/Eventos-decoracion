@@ -20,6 +20,7 @@ export interface Evento {
   customExtraNote?: string;
   selectedExtras?: PlanSelectionExtra[];
   gallery?: GalleryImage[];
+  sections?: EventSection[];
   source?: string;
   createdAt: string;
   updatedAt?: string;
@@ -32,6 +33,31 @@ export interface GalleryImage {
   caption?: string;
   order: number;
   isActive: boolean;
+  createdAt?: string;
+  updatedAt?: string;
+}
+
+export type EventSectionType = 'hero' | 'gallery' | 'about' | 'contact';
+
+export interface EventSectionContent {
+  eyebrow?: string;
+  title?: string;
+  summary?: string;
+  heading?: string;
+  description?: string;
+  body?: string;
+  planHeading?: string;
+  planSummary?: string;
+  ctaLabel?: string;
+}
+
+export interface EventSection {
+  id: number;
+  eventId: number;
+  type: EventSectionType;
+  content: EventSectionContent;
+  isActive: boolean;
+  order: number;
   createdAt?: string;
   updatedAt?: string;
 }
@@ -70,6 +96,11 @@ export interface UpdateEventoDto extends Partial<CreateEventoDto> {}
 export interface GalleryMutationResponse {
   event: Evento;
   gallery: GalleryImage[];
+}
+
+export interface SectionReorderItem {
+  id: number;
+  order: number;
 }
 
 export type ContactStatus = 'pending' | 'contacted' | 'converted' | 'rejected';

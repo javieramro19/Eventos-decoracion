@@ -8,6 +8,7 @@ const logEvent = (action, data) => {
 };
 
 const CONTACT_STATUSES = ['pending', 'contacted', 'converted', 'rejected'];
+const SECTION_TYPES = ['hero', 'gallery', 'about', 'contact'];
 
 const parseJsonArray = (value) => {
   if (!value) return [];
@@ -118,6 +119,78 @@ const normalizeGalleryItem = (row) => ({
   updatedAt: row.updatedAt,
 });
 
+const parseSectionContent = (value) => {
+  if (!value) {
+    return {};
+  }
+
+  if (typeof value === 'object') {
+    return value;
+  }
+
+  try {
+    const parsed = JSON.parse(value);
+    return parsed && typeof parsed === 'object' && !Array.isArray(parsed) ? parsed : {};
+  } catch {
+    return {};
+  }
+};
+
+const normalizeSection = (row) => ({
+  id: row.id,
+  eventId: row.eventId,
+  type: row.type,
+  content: parseSectionContent(row.content),
+  isActive: Boolean(row.isActive),
+  order: Number(row.order) || 0,
+  createdAt: row.createdAt,
+  updatedAt: row.updatedAt,
+});
+
+const buildDefaultSections = (event) => [
+  {
+    type: 'hero',
+    content: {
+      eyebrow: 'Evento publicado',
+      title: event.title,
+      summary: event.description || '',
+    },
+    isActive: true,
+    order: 0,
+  },
+  {
+    type: 'gallery',
+    content: {
+      heading: 'Galeria del evento',
+      description: 'Una seleccion visual del montaje, la ambientacion y los detalles del evento.',
+    },
+    isActive: true,
+    order: 1,
+  },
+  {
+    type: 'about',
+    content: {
+      heading: 'La propuesta',
+      body: event.description || '',
+      planHeading: event.planName || 'Plan EventoSonic',
+      planSummary: event.planSummary || '',
+    },
+    isActive: true,
+    order: 2,
+  },
+  {
+    type: 'contact',
+    content: {
+      eyebrow: 'Solicitar informacion',
+      heading: '¿Te interesa este montaje?',
+      body: 'Envia tu solicitud y la guardaremos directamente en el panel de administracion del evento.',
+      ctaLabel: 'Enviar solicitud',
+    },
+    isActive: true,
+    order: 3,
+  },
+];
+
 const getGalleryRowsByEventId = async (eventId, options = {}) => {
   const { includeInactive = true } = options;
   const params = [eventId];
@@ -135,6 +208,105 @@ const getGalleryRowsByEventId = async (eventId, options = {}) => {
 
   const [rows] = await pool.query(query, params);
   return rows.map(normalizeGalleryItem);
+};
+
+const getSectionsByEventId = async (eventId, options = {}) => {
+  const { includeInactive = true } = options;
+  const params = [eventId];
+  let query = `
+    SELECT id, eventId, type, content, isActive, \`order\`, createdAt, updatedAt
+    FROM sections
+    WHERE eventId = ?
+  `;
+
+  if (!includeInactive) {
+    query += ' AND isActive = 1';
+  }
+
+  query += ' ORDER BY `order` ASC, id ASC';
+
+  const [rows] = await pool.query(query, params);
+  return rows.map(normalizeSection);
+};
+
+const ensureEventSections = async (event) => {
+  if (!event?.id) {
+    return [];
+  }
+
+  const existing = await getSectionsByEventId(event.id, { includeInactive: true });
+  if (existing.length > 0) {
+    return existing;
+  }
+
+  const defaults = buildDefaultSections(event);
+  for (const section of defaults) {
+    await pool.query(
+      'INSERT INTO sections (eventId, type, content, isActive, `order`) VALUES (?, ?, ?, ?, ?)',
+      [event.id, section.type, JSON.stringify(section.content), section.isActive, section.order]
+    );
+  }
+
+  return getSectionsByEventId(event.id, { includeInactive: true });
+};
+
+const syncSectionDefaultsFromEvent = async (previousEvent, nextEvent) => {
+  if (!previousEvent?.id || !nextEvent?.id) {
+    return;
+  }
+
+  const sections = await ensureEventSections(nextEvent);
+
+  for (const section of sections) {
+    const content = { ...section.content };
+    let changed = false;
+
+    if (section.type === 'hero') {
+      if (!content.title || content.title === previousEvent.title) {
+        content.title = nextEvent.title;
+        changed = true;
+      }
+
+      if (!content.summary || content.summary === (previousEvent.description || '')) {
+        content.summary = nextEvent.description || '';
+        changed = true;
+      }
+    }
+
+    if (section.type === 'about') {
+      if (!content.body || content.body === (previousEvent.description || '')) {
+        content.body = nextEvent.description || '';
+        changed = true;
+      }
+
+      if (!content.planHeading || content.planHeading === (previousEvent.planName || 'Plan EventoSonic')) {
+        content.planHeading = nextEvent.planName || 'Plan EventoSonic';
+        changed = true;
+      }
+
+      if (!content.planSummary || content.planSummary === (previousEvent.planSummary || '')) {
+        content.planSummary = nextEvent.planSummary || '';
+        changed = true;
+      }
+    }
+
+    if (changed) {
+      await pool.query('UPDATE sections SET content = ? WHERE id = ?', [JSON.stringify(content), section.id]);
+    }
+  }
+};
+
+const getOwnedSection = async (sectionId, eventId, userId) => {
+  const [rows] = await pool.query(
+    `SELECT s.id, s.eventId, s.type, s.content, s.isActive, s.\`order\`, s.createdAt, s.updatedAt
+     FROM sections s
+     INNER JOIN events e ON e.id = s.eventId
+     WHERE s.id = ? AND s.eventId = ? AND e.userId = ?
+     LIMIT 1`,
+    [sectionId, eventId, userId]
+  );
+
+  return rows[0] ? normalizeSection(rows[0]) : null;
 };
 
 const syncEventGallerySnapshot = async (eventId) => {
@@ -157,18 +329,26 @@ const buildEventResponse = async (row, options = {}) => {
     return normalized;
   }
 
-  if (!options.includeGallery) {
+  if (!options.includeGallery && !options.includeSections) {
     return normalized;
   }
 
-  const gallery = await getGalleryRowsByEventId(normalized.id, {
-    includeInactive: options.includeInactiveGallery !== false,
-  });
+  const response = { ...normalized };
 
-  return {
-    ...normalized,
-    gallery,
-  };
+  if (options.includeGallery) {
+    response.gallery = await getGalleryRowsByEventId(normalized.id, {
+      includeInactive: options.includeInactiveGallery !== false,
+    });
+  }
+
+  if (options.includeSections) {
+    await ensureEventSections(normalized);
+    response.sections = await getSectionsByEventId(normalized.id, {
+      includeInactive: options.includeInactiveSections !== false,
+    });
+  }
+
+  return response;
 };
 
 const replaceGalleryFromImageUrls = async (eventId, imageUrls = []) => {
@@ -190,7 +370,12 @@ const sendGalleryMutationResponse = async (res, eventId, userId) => {
   const gallery = await getGalleryRowsByEventId(eventId, { includeInactive: true });
 
   res.json({
-    event: await buildEventResponse(event, { includeGallery: true, includeInactiveGallery: true }),
+    event: await buildEventResponse(event, {
+      includeGallery: true,
+      includeInactiveGallery: true,
+      includeSections: true,
+      includeInactiveSections: true,
+    }),
     gallery,
   });
 };
@@ -355,7 +540,14 @@ exports.getPublicEventBySlug = async (req, res) => {
       return res.status(404).json({ error: 'Evento publico no encontrado' });
     }
 
-    res.json(await buildEventResponse(rows[0], { includeGallery: true, includeInactiveGallery: false }));
+    res.json(
+      await buildEventResponse(rows[0], {
+        includeGallery: true,
+        includeInactiveGallery: false,
+        includeSections: true,
+        includeInactiveSections: false,
+      })
+    );
   } catch (error) {
     console.error('Error al obtener evento publico:', error.message || error);
     res.status(500).json({ error: 'Error al obtener evento publico' });
@@ -454,10 +646,32 @@ exports.getAdminEventById = async (req, res) => {
       return res.status(404).json({ error: 'Evento no encontrado' });
     }
 
-    res.json(await buildEventResponse(event, { includeGallery: true, includeInactiveGallery: true }));
+    res.json(
+      await buildEventResponse(event, {
+        includeGallery: true,
+        includeInactiveGallery: true,
+        includeSections: true,
+        includeInactiveSections: true,
+      })
+    );
   } catch (error) {
     console.error('Error al obtener evento admin:', error.message || error);
     res.status(500).json({ error: 'Error al obtener evento admin' });
+  }
+};
+
+exports.getAdminEventSections = async (req, res) => {
+  try {
+    const event = await findOwnedEvent(req.params.id, req.user.id);
+    if (!event) {
+      return res.status(404).json({ error: 'Evento no encontrado' });
+    }
+
+    await ensureEventSections(event);
+    res.json(await getSectionsByEventId(req.params.id, { includeInactive: true }));
+  } catch (error) {
+    console.error('Error al obtener las secciones del evento:', error.message || error);
+    res.status(500).json({ error: 'Error al obtener las secciones del evento' });
   }
 };
 
@@ -583,7 +797,15 @@ exports.createAdminEvent = async (req, res) => {
     }
 
     const created = await findOwnedEvent(result.insertId, req.user.id);
-    res.status(201).json(await buildEventResponse(created, { includeGallery: true, includeInactiveGallery: true }));
+    await ensureEventSections(created);
+    res.status(201).json(
+      await buildEventResponse(created, {
+        includeGallery: true,
+        includeInactiveGallery: true,
+        includeSections: true,
+        includeInactiveSections: true,
+      })
+    );
   } catch (error) {
     console.error('Error al crear el evento:', error.message || error);
     res.status(500).json({ error: 'Error al crear el evento' });
@@ -651,7 +873,16 @@ exports.updateAdminEvent = async (req, res) => {
     }
 
     const updated = await findOwnedEvent(req.params.id, req.user.id);
-    res.json(await buildEventResponse(updated, { includeGallery: true, includeInactiveGallery: true }));
+    await syncSectionDefaultsFromEvent(current, updated);
+    await ensureEventSections(updated);
+    res.json(
+      await buildEventResponse(updated, {
+        includeGallery: true,
+        includeInactiveGallery: true,
+        includeSections: true,
+        includeInactiveSections: true,
+      })
+    );
   } catch (error) {
     console.error('Error al actualizar el evento:', error.message || error);
     res.status(500).json({ error: 'Error al actualizar el evento' });
@@ -791,6 +1022,87 @@ exports.removeAdminEventGalleryImage = async (req, res) => {
   } catch (error) {
     console.error('Error al eliminar la imagen de la galeria:', error.message || error);
     res.status(500).json({ error: 'Error al eliminar la imagen de la galeria' });
+  }
+};
+
+exports.reorderAdminEventSections = async (req, res) => {
+  try {
+    const event = await findOwnedEvent(req.params.id, req.user.id);
+    if (!event) {
+      return res.status(404).json({ error: 'Evento no encontrado' });
+    }
+
+    await ensureEventSections(event);
+
+    if (!Array.isArray(req.body?.items) || req.body.items.length === 0) {
+      return res.status(400).json({ error: 'Debes enviar una lista valida para reordenar las secciones' });
+    }
+
+    const sections = await getSectionsByEventId(req.params.id, { includeInactive: true });
+    const sectionIds = new Set(sections.map((section) => section.id));
+
+    for (const item of req.body.items) {
+      if (!sectionIds.has(Number(item.id))) {
+        return res.status(400).json({ error: 'La lista contiene secciones no asociadas a este evento' });
+      }
+    }
+
+    for (const item of req.body.items) {
+      await pool.query(
+        'UPDATE sections SET `order` = ? WHERE id = ? AND eventId = ?',
+        [Number(item.order) || 0, Number(item.id), req.params.id]
+      );
+    }
+
+    res.json(await getSectionsByEventId(req.params.id, { includeInactive: true }));
+  } catch (error) {
+    console.error('Error al reordenar las secciones:', error.message || error);
+    res.status(500).json({ error: 'Error al reordenar las secciones' });
+  }
+};
+
+exports.updateAdminEventSection = async (req, res) => {
+  try {
+    const event = await findOwnedEvent(req.params.id, req.user.id);
+    if (!event) {
+      return res.status(404).json({ error: 'Evento no encontrado' });
+    }
+
+    await ensureEventSections(event);
+    const section = await getOwnedSection(req.params.sectionId, req.params.id, req.user.id);
+    if (!section) {
+      return res.status(404).json({ error: 'Seccion no encontrada' });
+    }
+
+    const updates = [];
+    const values = [];
+
+    if (req.body.isActive !== undefined) {
+      updates.push('isActive = ?');
+      values.push(toBoolean(req.body.isActive));
+    }
+
+    if (req.body.content !== undefined) {
+      const content = parseSectionContent(req.body.content);
+      updates.push('content = ?');
+      values.push(JSON.stringify(content));
+    }
+
+    if (updates.length === 0) {
+      return res.status(400).json({ error: 'No hay cambios validos para esta seccion' });
+    }
+
+    values.push(req.params.sectionId, req.params.id);
+    await pool.query(
+      `UPDATE sections SET ${updates.join(', ')} WHERE id = ? AND eventId = ?`,
+      values
+    );
+
+    const updated = await getOwnedSection(req.params.sectionId, req.params.id, req.user.id);
+    res.json(updated);
+  } catch (error) {
+    console.error('Error al actualizar la seccion del evento:', error.message || error);
+    res.status(500).json({ error: 'Error al actualizar la seccion del evento' });
   }
 };
 

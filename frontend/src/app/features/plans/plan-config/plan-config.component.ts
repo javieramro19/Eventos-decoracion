@@ -92,33 +92,26 @@ import { PLAN_EXTRAS, PLANS, PlanCard, PlanExtra } from '../plans.data';
   styles: [
     `
       .plan-page {
-        max-width: 1180px;
+        width: var(--container);
         margin: 0 auto;
         display: grid;
-        gap: 1rem;
+        gap: 1.25rem;
       }
       .plan-hero, .plan-block, .custom-section, .summary-card, .not-found {
-        border-radius: 24px;
+        border-radius: 30px;
         border: 1px solid var(--border);
-        background: var(--surface);
-        box-shadow: var(--shadow-sm);
+        background: rgba(255, 255, 255, 0.88);
+        box-shadow: var(--shadow-md);
       }
       .plan-hero {
-        padding: 1.8rem;
+        padding: 2rem;
         display: flex;
         justify-content: space-between;
         gap: 1rem;
         align-items: flex-start;
         background:
-          radial-gradient(circle at top left, rgba(212, 175, 122, 0.16), transparent 28%),
-          linear-gradient(180deg, #fffdf9 0%, #f9f1e8 100%);
-      }
-      .eyebrow {
-        color: var(--accent-strong);
-        text-transform: uppercase;
-        letter-spacing: 0.12em;
-        font-size: 0.74rem;
-        font-weight: 800;
+          radial-gradient(circle at top left, rgba(255, 255, 255, 0.55), transparent 35%),
+          linear-gradient(135deg, rgba(212, 175, 122, 0.42), rgba(245, 230, 218, 0.9));
       }
       h1, h2, strong {
         font-family: var(--font-display);
@@ -142,17 +135,29 @@ import { PLAN_EXTRAS, PLANS, PlanCard, PlanExtra } from '../plans.data';
       }
       .plan-layout {
         display: grid;
-        grid-template-columns: 0.9fr 1.1fr;
-        gap: 1rem;
+        grid-template-columns: minmax(0, 0.9fr) minmax(0, 1.1fr);
+        gap: 1.25rem;
       }
       .plan-block, .custom-section, .summary-card {
-        padding: 1.5rem;
+        padding: 1.6rem;
       }
       ul {
         margin: 0;
-        padding-left: 1.1rem;
+        padding: 0;
+        list-style: none;
         display: grid;
-        gap: 0.45rem;
+        gap: 0.65rem;
+      }
+      li {
+        position: relative;
+        padding-left: 1.5rem;
+      }
+      li::before {
+        content: '✓';
+        position: absolute;
+        left: 0;
+        color: var(--accent-strong);
+        font-weight: 800;
       }
       .extras-grid {
         display: grid;
@@ -162,21 +167,31 @@ import { PLAN_EXTRAS, PLANS, PlanCard, PlanExtra } from '../plans.data';
         display: grid;
         grid-template-columns: auto 1fr auto;
         gap: 0.75rem;
-        padding: 0.9rem;
-        border-radius: 16px;
-        border: 1px solid var(--border);
-        background: #fffdf9;
+        padding: 1.2rem;
+        border-radius: 22px;
+        border: 1px solid rgba(44, 44, 44, 0.08);
+        background: rgba(255, 255, 255, 0.82);
         align-items: flex-start;
+        transition: transform 0.25s ease, box-shadow 0.25s ease, border-color 0.25s ease;
+      }
+      .extra-card:hover {
+        transform: translateY(-3px);
+        box-shadow: 0 14px 30px rgba(44, 44, 44, 0.09);
       }
       .extra-card input {
         margin-top: 0.35rem;
         width: auto;
+        accent-color: var(--accent-strong);
       }
       .extra-card strong {
         font-size: 1.05rem;
       }
       .extra-card p {
         margin: 0.25rem 0 0;
+      }
+      .extra-card:has(input:checked) {
+        border-color: rgba(212, 175, 122, 0.65);
+        background: linear-gradient(135deg, rgba(255, 255, 255, 0.95), rgba(245, 230, 218, 0.72));
       }
       .summary-lines {
         display: grid;

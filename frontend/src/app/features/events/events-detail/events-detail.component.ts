@@ -33,9 +33,9 @@ import { EventoService } from '../../../core/services/events.service';
           </div>
 
           <div class="actions">
-            <a mat-stroked-button routerLink="/events">Volver</a>
-            <a mat-raised-button color="primary" [routerLink]="['/events', evento.id, 'edit']">Editar</a>
-            <button mat-button color="warn" type="button" (click)="delete(evento)">Eliminar</button>
+            <a mat-stroked-button class="action-button action-button--soft" routerLink="/events">Volver</a>
+            <a mat-raised-button color="primary" class="action-button" [routerLink]="['/events', evento.id, 'edit']">Editar</a>
+            <button mat-stroked-button class="action-button action-button--danger" type="button" (click)="delete(evento)">Eliminar</button>
           </div>
         </section>
 
@@ -139,6 +139,24 @@ import { EventoService } from '../../../core/services/events.service';
         display: flex;
         flex-wrap: wrap;
         gap: 0.75rem;
+      }
+      .action-button {
+        min-height: 2.9rem;
+        padding-inline: 1rem;
+        border-radius: 999px !important;
+        font-weight: 700;
+      }
+      .action-button--soft {
+        background: rgba(255, 255, 255, 0.92);
+        border-color: rgba(44, 44, 44, 0.12) !important;
+        color: var(--text) !important;
+        box-shadow: 0 8px 18px rgba(44, 44, 44, 0.06);
+      }
+      .action-button--danger {
+        background: rgba(255, 255, 255, 0.92);
+        border-color: rgba(200, 72, 72, 0.22) !important;
+        color: #b54848 !important;
+        box-shadow: 0 8px 18px rgba(44, 44, 44, 0.06);
       }
       .content-grid {
         display: grid;

@@ -1,0 +1,173 @@
+<div class="landing-shell">
+  <section class="hero-section" id="inicio">
+    <div class="hero-media">
+      <img src="assets/hero.jpg" alt="Mesa principal decorada de EventoSonic">
+      <div class="hero-overlay"></div>
+    </div>
+
+    <div class="container hero-content">
+      <div class="hero-panel">
+        <p class="eyebrow">Diseno, montaje y decoracion a medida</p>
+        <h1>Decoracion cuidada para celebraciones que se quieren recordar.</h1>
+        <p class="hero-text">
+          EventoSonic presenta planes decorativos para bodas, comuniones, cumpleanos, bautizos y eventos de empresa.
+          Puedes revisar opciones, anadir extras y dejar la propuesta guardada para gestionarla despues desde tu panel.
+        </p>
+        <div class="hero-actions">
+          <a mat-raised-button color="primary" [routerLink]="authRoute">{{ authLabel }}</a>
+          <a mat-stroked-button class="soft-outline-button" routerLink="/" fragment="planes">Ver planes</a>
+        </div>
+        <div class="hero-highlights">
+          <article>
+            <strong>3 planes</strong>
+            <span>para empezar con una base clara</span>
+          </article>
+          <article>
+            <strong>Extras</strong>
+            <span>para ajustar el montaje a cada evento</span>
+          </article>
+          <article>
+            <strong>Panel</strong>
+            <span>para guardar y revisar propuestas</span>
+          </article>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section class="section-shell about-section">
+    <div class="container about-grid">
+      <div class="about-copy">
+        <p class="eyebrow">Quienes somos</p>
+        <h2>Una forma mas clara de presentar y organizar servicios de decoracion para eventos.</h2>
+        <p>
+          Informacion de la empresa, su historia, su forma de trabajar o cualquier otro texto que ayude a transmitir la personalidad de la marca.
+        </p>
+        <p>
+          El objetivo es combinar una presentacion visual cuidada con una parte practica: elegir plan,
+          personalizar extras y dejar toda la informacion guardada para seguirla mas tarde.
+        </p>
+        <div class="metrics-grid">
+          <article>
+            <strong>Consulta inicial</strong>
+            <span>Primero se define el tipo de celebracion y el ambiente buscado.</span>
+          </article>
+          <article>
+            <strong>Propuesta clara</strong>
+            <span>Cada plan muestra de forma sencilla que incluye y como puede ampliarse.</span>
+          </article>
+          <article>
+            <strong>Gestion sencilla</strong>
+            <span>La informacion queda preparada para revisarla despues en el panel.</span>
+          </article>
+        </div>
+      </div>
+
+      <div class="about-visual">
+        <img src="assets/nosotros.jpg" alt="Equipo preparando una decoracion para evento">
+      </div>
+    </div>
+  </section>
+
+  <section class="section-shell gallery-section" id="trabajo">
+    <div class="container">
+      <div class="section-heading">
+        <p class="eyebrow">Galeria</p>
+        <h2>Ejemplos de montajes y rincones decorativos</h2>
+        <p>Estas imagenes ayudan a transmitir el tipo de resultado que luego se puede configurar y guardar dentro del proyecto.</p>
+      </div>
+
+      <div class="gallery-grid">
+        <article class="gallery-card" *ngFor="let item of gallery">
+          <img [src]="item.image" [alt]="item.title">
+          <div class="gallery-copy">
+            <h3>{{ item.title }}</h3>
+            <p>{{ item.description }}</p>
+          </div>
+        </article>
+      </div>
+    </div>
+  </section>
+
+  <section id="planes" class="section-shell plans-section">
+    <div class="container">
+      <div class="section-heading">
+        <p class="eyebrow">Planes</p>
+        <h2>Elige una base y personalizala segun el evento.</h2>
+        <p>Despues podras entrar al configurador, marcar extras opcionales y guardar la propuesta final.</p>
+      </div>
+
+      <div class="plans-grid">
+        <article *ngFor="let plan of plans; let index = index" class="plan-card" [class.plan-card-featured]="index === 1">
+          <span *ngIf="index === 1" class="plan-badge">Mas solicitado</span>
+          <div class="plan-icon">{{ plan.name.slice(0, 2).toUpperCase() }}</div>
+
+          <div class="plan-top">
+            <div>
+              <span class="plan-tag">{{ plan.name }}</span>
+              <h3>{{ plan.priceLabel }}</h3>
+            </div>
+            <p>{{ plan.description }}</p>
+          </div>
+
+          <p class="plan-summary">{{ plan.summary }}</p>
+
+          <div class="metrics-row">
+            <div *ngFor="let metric of plan.metrics" class="metric-pill">
+              <strong>{{ metric.value }}</strong>
+              <span>{{ metric.label }}</span>
+            </div>
+          </div>
+
+          <ul>
+            <li *ngFor="let feature of plan.features">{{ feature }}</li>
+          </ul>
+
+          <div class="plan-actions">
+            <a mat-raised-button color="primary" [routerLink]="['/plans', plan.id]">Elegir este plan</a>
+          </div>
+        </article>
+      </div>
+    </div>
+  </section>
+
+  <section class="section-shell process-section">
+    <div class="container">
+      <div class="section-heading">
+        <p class="eyebrow">Proceso</p>
+        <h2>Asi se transforma una idea en una propuesta util.</h2>
+        <p>La parte visual inspira, pero la parte practica sigue siendo elegir, configurar, guardar y continuar desde el panel.</p>
+      </div>
+
+      <div class="process-grid">
+        <article *ngFor="let step of process; let index = index" class="process-step">
+          <span class="step-number">{{ index + 1 }}</span>
+          <h3>{{ step.title }}</h3>
+          <p>{{ step.description }}</p>
+        </article>
+      </div>
+    </div>
+  </section>
+
+  <section class="contact-section" id="contacto">
+    <div class="container">
+      <div class="section-heading section-heading-light">
+        <p class="eyebrow">Informacion</p>
+        <h2>Una presentacion mas ordenada para que el siguiente paso sea sencillo.</h2>
+        <p>Si quieres cambiar cualquier texto de esta landing, ahora puedes hacerlo directamente desde este archivo HTML.</p>
+      </div>
+
+      <div class="contact-grid">
+        <article class="contact-card" *ngFor="let item of contact">
+          <h3>{{ item.title }}</h3>
+          <p>{{ item.value }}</p>
+        </article>
+      </div>
+
+      <div class="footer-actions">
+        <a mat-raised-button color="primary" [routerLink]="authRoute">{{ authLabel }}</a>
+        <a mat-stroked-button class="footer-outline" routerLink="/" fragment="planes">Comparar planes</a>
+      </div>
+    </div>
+  </section>
+</div>

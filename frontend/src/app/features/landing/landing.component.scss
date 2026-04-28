@@ -1,0 +1,446 @@
+.landing-shell { display: grid; gap: 1.5rem; }
+
+.hero-section {
+  position: relative;
+  min-height: calc(100vh - 130px);
+  border-radius: var(--radius-lg);
+  overflow: hidden;
+}
+
+.hero-media,
+.hero-media img,
+.hero-overlay {
+  position: absolute;
+  inset: 0;
+}
+
+.hero-media img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.hero-overlay {
+  background: linear-gradient(120deg, rgba(30, 26, 20, 0.76) 0%, rgba(30, 26, 20, 0.54) 55%, rgba(30, 26, 20, 0.62) 100%);
+}
+
+h1, h2, h3 {
+  margin: 0;
+  font-family: var(--font-display);
+  line-height: 1.08;
+}
+
+h1 {
+  margin: 0;
+  font-size: clamp(2.8rem, 7vw, 5.2rem);
+  max-width: 11ch;
+}
+
+h2 {
+  font-size: clamp(2rem, 5vw, 3.4rem);
+}
+
+.hero-content {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  align-items: center;
+  min-height: calc(100vh - 130px);
+  padding: clamp(4rem, 12vw, 7rem) 0;
+}
+
+.hero-panel {
+  max-width: 44rem;
+  padding: clamp(1.75rem, 4vw, 2.75rem);
+  border-radius: 30px;
+  background: rgba(255, 250, 245, 0.94);
+  border: 1px solid rgba(44, 44, 44, 0.08);
+  box-shadow: 0 24px 60px rgba(44, 44, 44, 0.14);
+}
+
+.hero-text,
+.section-heading p,
+.about-copy p,
+.gallery-copy p,
+.plan-top p,
+.plan-summary,
+.process-step p {
+  color: var(--text-soft);
+}
+
+.hero-text {
+  max-width: 38rem;
+  margin-top: 1.25rem;
+  font-size: clamp(1rem, 2.7vw, 1.16rem);
+}
+
+.hero-actions,
+.footer-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 1rem;
+}
+
+.hero-actions a,
+.footer-actions a,
+.plan-actions a {
+  min-height: 3.3rem;
+  padding-inline: 1.45rem;
+  font-weight: 800;
+}
+
+.hero-actions {
+  margin-top: 2rem;
+}
+
+.hero-highlights {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 0.85rem;
+  margin-top: 2rem;
+}
+
+.hero-highlights article,
+.metric-pill,
+.metrics-grid article {
+  padding: 1rem 1.1rem;
+  border-radius: 22px;
+  border: 1px solid rgba(44, 44, 44, 0.07);
+  background: rgba(255, 255, 255, 0.82);
+  box-shadow: var(--shadow-sm);
+}
+
+.hero-highlights strong,
+.metric-pill strong,
+.metrics-grid strong {
+  display: block;
+  font-size: 1.35rem;
+}
+
+.hero-highlights span,
+.metric-pill span,
+.metrics-grid span {
+  color: var(--muted);
+  font-size: 0.92rem;
+}
+
+.about-section,
+.gallery-section,
+.plans-section,
+.process-section {
+  padding: clamp(4.5rem, 10vw, 7rem) 0;
+}
+
+.plans-section {
+  scroll-margin-top: 110px;
+}
+
+.about-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1.1fr) minmax(0, 0.9fr);
+  gap: 3rem;
+  align-items: center;
+}
+
+.about-copy {
+  display: grid;
+  gap: 1.15rem;
+}
+
+.metrics-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 1rem;
+  margin-top: 0.8rem;
+}
+
+.about-visual {
+  overflow: hidden;
+  border-radius: var(--radius-lg);
+  min-height: 32rem;
+  box-shadow: var(--shadow-md);
+}
+
+.about-visual img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.section-heading {
+  max-width: 42rem;
+  text-align: center;
+  margin: 0 auto 2.5rem;
+}
+
+.section-heading p:last-child {
+  margin-top: 1rem;
+}
+
+.gallery-section {
+  background:
+    radial-gradient(circle at 10% 0%, rgba(245, 230, 218, 0.7), transparent 30%),
+    linear-gradient(180deg, rgba(255, 255, 255, 0.36), rgba(255, 255, 255, 0.75));
+}
+
+.gallery-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 1rem;
+}
+
+.gallery-card,
+.plan-card,
+.process-step,
+.contact-card {
+  overflow: hidden;
+  border-radius: var(--radius-md);
+  background: rgba(255, 255, 255, 0.88);
+  border: 1px solid rgba(44, 44, 44, 0.07);
+  box-shadow: var(--shadow-md);
+}
+
+.gallery-card img {
+  width: 100%;
+  height: 18rem;
+  object-fit: cover;
+}
+
+.gallery-copy {
+  padding: 1.25rem 1.2rem 1.4rem;
+}
+
+.soft-outline-button {
+  background: rgba(255, 255, 255, 0.9);
+  color: var(--text) !important;
+  border-color: rgba(44, 44, 44, 0.16) !important;
+}
+
+.plan-tag {
+  display: inline-flex;
+  align-items: center;
+  padding: 0.4rem 0.7rem;
+  border-radius: 999px;
+  background: rgba(212, 175, 122, 0.15);
+  color: var(--accent-strong);
+  font-size: 0.76rem;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+}
+
+.plans-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 1.35rem;
+}
+
+.plan-card {
+  position: relative;
+  padding: 1.5rem;
+  display: grid;
+  gap: 0.95rem;
+  background: rgba(255, 255, 255, 0.92);
+  transition: transform 0.3s ease, box-shadow 0.3s ease;
+}
+
+.plan-card:hover {
+  transform: translateY(-8px);
+  box-shadow: var(--shadow-lg);
+}
+
+.plan-card-featured {
+  border-color: rgba(212, 175, 122, 0.58);
+  transform: translateY(-0.25rem);
+}
+
+.plan-badge {
+  position: absolute;
+  top: 1rem;
+  right: 1rem;
+  background: linear-gradient(135deg, var(--accent), #f1dcc0);
+  color: #241d17;
+  padding: 0.45rem 0.8rem;
+  border-radius: 999px;
+  font-size: 0.8rem;
+  font-weight: 800;
+}
+
+.plan-icon {
+  width: 3.2rem;
+  height: 3.2rem;
+  border-radius: 1rem;
+  display: inline-grid;
+  place-items: center;
+  background: linear-gradient(135deg, rgba(212, 175, 122, 0.22), rgba(245, 230, 218, 0.92));
+  color: var(--accent-strong);
+  font-size: 0.95rem;
+  font-weight: 900;
+  letter-spacing: 0.12em;
+}
+
+.plan-top h3 {
+  margin: 0.8rem 0 0.4rem;
+  font-size: 2rem;
+  line-height: 1.08;
+}
+
+.plan-summary {
+  margin: 1rem 0 0;
+  padding: 1rem;
+  border-radius: var(--radius-sm);
+  background: rgba(245, 230, 218, 0.45);
+  line-height: 1.65;
+}
+
+.metrics-row {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 0.75rem;
+  margin: 1.4rem 0;
+}
+
+.metric-pill {
+  min-height: 96px;
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-start;
+  align-items: flex-start;
+  gap: 0.35rem;
+  padding: 1rem 0.95rem;
+}
+
+.metric-pill strong {
+  font-size: 1.05rem;
+  line-height: 1.15;
+  word-break: normal;
+  overflow-wrap: normal;
+}
+
+.metric-pill span {
+  display: block;
+  font-size: 0.78rem;
+  line-height: 1.25;
+  word-break: normal;
+  overflow-wrap: break-word;
+  hyphens: none;
+}
+
+ul {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: grid;
+  gap: 0.55rem;
+}
+
+li {
+  position: relative;
+  padding-left: 1.4rem;
+  color: var(--text-soft);
+}
+
+li::before {
+  content: '\2713';
+  position: absolute;
+  left: 0;
+  color: var(--accent-strong);
+  font-weight: 800;
+}
+
+.plan-actions {
+  margin-top: 1.25rem;
+  display: flex;
+}
+
+.process-grid,
+.contact-grid {
+  display: grid;
+  gap: 1rem;
+}
+
+.process-grid {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+
+.process-step {
+  padding: 1.7rem 1.4rem;
+}
+
+.step-number {
+  display: inline-grid;
+  place-items: center;
+  width: 3rem;
+  height: 3rem;
+  border-radius: 999px;
+  background: linear-gradient(135deg, var(--accent), #f0d8b9);
+  color: #261f19;
+  font-weight: 900;
+  margin-bottom: 1rem;
+}
+
+.contact-section {
+  background:
+    radial-gradient(circle at top, rgba(212, 175, 122, 0.12), transparent 35%),
+    linear-gradient(180deg, #2c2c2c 0%, #1d1d1d 100%);
+  color: #fef8f2;
+  padding: 4.5rem 0 2rem;
+  border-radius: var(--radius-lg);
+}
+
+.section-heading-light .eyebrow,
+.section-heading-light p:last-child {
+  color: rgba(255, 248, 243, 0.8);
+}
+
+.contact-grid {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.contact-card {
+  padding: 1.5rem;
+  background: rgba(255, 255, 255, 0.06);
+  color: #fffaf6;
+}
+
+.contact-card p {
+  color: rgba(255, 248, 243, 0.82);
+}
+
+.footer-actions {
+  justify-content: space-between;
+  align-items: center;
+  margin-top: 2rem;
+}
+
+.footer-outline {
+  color: #fffaf6;
+  border-color: rgba(255, 248, 243, 0.42) !important;
+  background: rgba(255, 255, 255, 0.08);
+}
+
+@media (max-width: 1080px) {
+  .gallery-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .plans-grid,
+  .process-grid,
+  .about-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 720px) {
+  .hero-highlights,
+  .metrics-row,
+  .metrics-grid,
+  .gallery-grid,
+  .contact-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .footer-actions {
+    align-items: stretch;
+  }
+}

@@ -6,35 +6,46 @@
   --font-body: 'Nunito', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
   --font-display: 'Playfair Display', Georgia, serif;
 
-  --bg: #FFF8F3;
-  --surface: #FFFFFF;
-  --surface-alt: #F5E6DA;
+  --bg: #fff8f3;
+  --surface: #ffffff;
+  --surface-alt: #f5e6da;
+  --surface-muted: #f8eee6;
 
-  --text: #2C2C2C;
-  --text-soft: #555555;
-  --muted: #999999;
+  --text: #2c2c2c;
+  --text-soft: #5f5a54;
+  --muted: #8f877e;
 
-  --accent: #D4AF7A;
-  --accent-strong: #C8956C;
-  --accent-soft: #E8D5BF;
+  --accent: #d4af7a;
+  --accent-strong: #bb935d;
+  --accent-soft: #ead8c1;
 
-  --secondary: #F5E6DA;
-  --secondary-strong: #E8D5BF;
+  --secondary: #f5e6da;
+  --secondary-strong: #e8d5bf;
 
-  --border: rgba(212, 175, 122, 0.2);
-  --shadow-sm: 0 2px 8px rgba(44, 44, 44, 0.08);
-  --shadow-md: 0 4px 16px rgba(44, 44, 44, 0.12);
-  --shadow-lg: 0 8px 32px rgba(44, 44, 44, 0.16);
+  --border: rgba(44, 44, 44, 0.08);
+  --shadow-sm: 0 10px 24px rgba(44, 44, 44, 0.07);
+  --shadow-md: 0 18px 45px rgba(70, 47, 24, 0.12);
+  --shadow-lg: 0 22px 60px rgba(44, 44, 44, 0.16);
+  --radius-sm: 16px;
+  --radius-md: 24px;
+  --radius-lg: 34px;
+  --container: min(1120px, calc(100vw - 2rem));
 
-  --success: #6ECB8D;
-  --error: #E74C3C;
-  --warning: #F39C12;
+  --success: #6ecb8d;
+  --error: #e74c3c;
+  --warning: #f39c12;
+}
+
+html {
+  scroll-behavior: smooth;
 }
 
 body {
   margin: 0;
   min-height: 100vh;
-  background: var(--bg);
+  background:
+    radial-gradient(circle at top left, rgba(212, 175, 122, 0.18), transparent 30%),
+    linear-gradient(180deg, #fffaf6 0%, var(--bg) 100%);
   color: var(--text);
   font-family: var(--font-body);
   -webkit-font-smoothing: antialiased;
@@ -45,8 +56,21 @@ body {
   box-sizing: border-box;
 }
 
-html {
-  scroll-behavior: smooth;
+img {
+  display: block;
+  max-width: 100%;
+}
+
+a {
+  color: inherit;
+  text-decoration: none;
+}
+
+button,
+input,
+textarea,
+select {
+  font: inherit;
 }
 
 input,
@@ -153,7 +177,7 @@ button:active {
 .card {
   background: var(--surface);
   border: 1px solid var(--border);
-  border-radius: 16px;
+  border-radius: var(--radius-sm);
   padding: 24px;
   box-shadow: var(--shadow-sm);
   transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
@@ -244,9 +268,26 @@ button:active {
 }
 
 .container {
-  max-width: 1200px;
+  width: var(--container);
   margin: 0 auto;
-  padding: 0 20px;
+}
+
+.section-shell {
+  background: rgba(255, 255, 255, 0.72);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-md);
+  backdrop-filter: blur(14px);
+}
+
+.eyebrow {
+  display: inline-block;
+  margin: 0 0 0.7rem;
+  font-size: 0.85rem;
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+  font-weight: 800;
+  color: var(--accent-strong);
 }
 
 @keyframes fadeInUp {
@@ -291,11 +332,23 @@ button:active {
 
 .mat-mdc-raised-button.mat-primary {
   --mdc-protected-button-container-color: #D4AF7A;
-  --mdc-protected-button-label-text-color: #FFFFFF;
+  --mdc-protected-button-label-text-color: #221c17;
+  box-shadow: 0 16px 30px rgba(44, 44, 44, 0.12) !important;
 }
 
 .mat-mdc-outlined-button,
 .mat-mdc-unelevated-button,
 .mat-mdc-raised-button {
   border-radius: 999px !important;
+}
+
+.mat-mdc-outlined-button:not(:disabled) {
+  border-color: rgba(44, 44, 44, 0.14) !important;
+  color: var(--text) !important;
+  background: rgba(255, 255, 255, 0.86);
+}
+
+.mat-mdc-outlined-button:hover:not(:disabled),
+.mat-mdc-raised-button:hover:not(:disabled) {
+  transform: translateY(-2px);
 }

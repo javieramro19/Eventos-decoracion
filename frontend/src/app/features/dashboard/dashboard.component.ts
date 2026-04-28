@@ -6,7 +6,7 @@ import { MatCardModule } from '@angular/material/card';
 import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
 import { AuthService } from '../../core/services/auth.service';
 import { EventoService } from '../../core/services/events.service';
-import { DashboardStats } from '../../core/models/event.model';
+import { ContactStatus, DashboardStatItem, DashboardStats, EventContact } from '../../core/models/event.model';
 
 @Component({
   selector: 'app-dashboard',
@@ -16,14 +16,14 @@ import { DashboardStats } from '../../core/models/event.model';
     <div class="dashboard-container">
       <section class="hero-card">
         <div>
-          <span class="eyebrow">Panel de control</span>
+          <span class="eyebrow">Panel de gestion</span>
           <h1>Hola, {{ authService.currentUser()?.name || 'cliente' }}.</h1>
-          <p class="subtitle">Aqui tienes una vista rapida de tus propuestas, planes confirmados y accesos directos para seguir organizando el evento.</p>
+          <p class="subtitle">Controla de un vistazo tus eventos publicados, las solicitudes pendientes y las oportunidades que necesitan respuesta.</p>
         </div>
 
         <div class="quick-actions">
-          <a mat-raised-button color="primary" routerLink="/" fragment="planes">Elegir plan</a>
-          <a mat-stroked-button routerLink="/events">Ver eventos</a>
+          <a mat-raised-button color="primary" routerLink="/admin/events/new">Nuevo evento</a>
+          <a mat-stroked-button routerLink="/admin/contacts">Ver solicitudes</a>
         </div>
       </section>
 
@@ -36,59 +36,104 @@ import { DashboardStats } from '../../core/models/event.model';
         <section class="metrics-grid">
           <mat-card class="metric-card accent">
             <mat-card-content>
-              <span class="metric-label">Total de eventos</span>
-              <strong>{{ data.total }}</strong>
-              <p>Todos los proyectos registrados en tu cuenta.</p>
+              <span class="metric-label">Eventos totales</span>
+              <strong>{{ data.totalEvents }}</strong>
+              <p>Todos los proyectos guardados en tu cuenta.</p>
             </mat-card-content>
           </mat-card>
 
           <mat-card class="metric-card">
             <mat-card-content>
-              <span class="metric-label">Actividad semanal</span>
-              <strong>{{ data.thisWeek }}</strong>
-              <p>Eventos creados durante los ultimos 7 dias.</p>
+              <span class="metric-label">Eventos publicados</span>
+              <strong>{{ data.publishedEvents }}</strong>
+              <p>Ya visibles en la parte publica del portfolio.</p>
             </mat-card-content>
           </mat-card>
 
-          <mat-card class="metric-card" *ngFor="let item of data.byStatus">
+          <mat-card class="metric-card warning">
             <mat-card-content>
-              <span class="metric-label">{{ formatStatus(item.status) }}</span>
-              <strong>{{ item.count }}</strong>
-              <p>Registros asociados a esta categoria.</p>
+              <span class="metric-label">Solicitudes pendientes</span>
+              <strong>{{ data.pendingContacts }}</strong>
+              <p>{{ data.stalePendingContacts > 0 ? data.stalePendingContacts + ' llevan mas de 24h sin respuesta.' : 'Revisa y convierte nuevas oportunidades.' }}</p>
             </mat-card-content>
           </mat-card>
         </section>
 
-        <section class="recent-card" *ngIf="data.recent.length > 0; else emptyRecent">
+        <section class="alerts-card" *ngIf="data.alerts.length > 0">
           <div class="section-head">
             <div>
-              <span class="eyebrow">Actividad reciente</span>
-              <h2>Ultimas propuestas guardadas</h2>
+              <span class="eyebrow">Alertas</span>
+              <h2>Lo que requiere atencion hoy</h2>
             </div>
           </div>
 
-          <div class="recent-list">
-            <article *ngFor="let event of data.recent" class="recent-item">
-              <div>
-                <a class="recent-title" [routerLink]="['/events', event.id]">{{ event.title }}</a>
-                <p>{{ event.description || 'Sin descripcion anadida por ahora.' }}</p>
-                <span class="recent-plan" *ngIf="event.planName">Plan confirmado: {{ event.planName }}</span>
-              </div>
-              <div class="recent-meta">
-                <span>{{ event.createdAt | date:'dd/MM/yyyy' }}</span>
-                <strong>{{ event.totalPrice ? (event.totalPrice | currency:'EUR':'symbol':'1.0-0') : formatStatus(event.category || 'other') }}</strong>
-              </div>
+          <div class="alerts-list">
+            <article *ngFor="let alert of data.alerts" class="alert-item" [class.alert-item--high]="alert.severity === 'high'">
+              <strong>{{ alertLabel(alert) }}</strong>
+              <p>{{ alert.message }}</p>
             </article>
           </div>
         </section>
 
-        <ng-template #emptyRecent>
-          <section class="recent-card empty-card">
-            <div class="ui-mark">ES</div>
-            <h2>Aun no hay actividad reciente</h2>
-            <p>Elige un plan o crea tu primer evento manual para empezar a organizar propuestas y extras.</p>
+        <div class="content-grid">
+          <section class="panel-card">
+            <div class="section-head">
+              <div>
+                <span class="eyebrow">Solicitudes recientes</span>
+                <h2>Contactos que acaban de entrar</h2>
+              </div>
+              <a mat-stroked-button routerLink="/admin/contacts">Gestionarlas</a>
+            </div>
+
+            <div *ngIf="data.recentContacts.length === 0" class="empty-inline">
+              Aun no hay solicitudes recientes.
+            </div>
+
+            <div *ngIf="data.recentContacts.length > 0" class="list-stack">
+              <article *ngFor="let contact of data.recentContacts" class="list-item">
+                <div>
+                  <span class="badge" [ngClass]="'badge-' + contact.status">{{ contactStatusLabel(contact.status) }}</span>
+                  <a class="item-title" [routerLink]="['/admin/contacts']">{{ contact.name }}</a>
+                  <p>{{ contact.eventTitle || 'Evento' }} · {{ contact.email }}</p>
+                </div>
+                <div class="item-meta">
+                  <span>{{ formatDate(contact.createdAt) }}</span>
+                  <a *ngIf="contact.eventSlug" [routerLink]="['/eventos', contact.eventSlug]">Ver publico</a>
+                </div>
+              </article>
+            </div>
           </section>
-        </ng-template>
+
+          <section class="panel-card">
+            <div class="section-head">
+              <div>
+                <span class="eyebrow">Acceso rapido</span>
+                <h2>Eventos recientes</h2>
+              </div>
+              <a mat-stroked-button routerLink="/admin/events">Todos los eventos</a>
+            </div>
+
+            <div *ngIf="data.recentEvents.length === 0" class="empty-inline">
+              Aun no has creado eventos recientes.
+            </div>
+
+            <div *ngIf="data.recentEvents.length > 0" class="list-stack">
+              <article *ngFor="let event of data.recentEvents" class="list-item">
+                <div>
+                  <span class="badge" [ngClass]="event.isPublished ? 'badge-published' : 'badge-draft'">
+                    {{ event.isPublished ? 'Publicado' : 'Borrador' }}
+                  </span>
+                  <a class="item-title" [routerLink]="['/admin/events', event.id, 'edit']">{{ event.title }}</a>
+                  <p>{{ event.planName || formatCategory(event.category || 'other') }}</p>
+                </div>
+                <div class="item-meta">
+                  <span>{{ formatDate(event.createdAt) }}</span>
+                  <a [routerLink]="['/admin/events', event.id, 'edit']">Editar</a>
+                </div>
+              </article>
+            </div>
+          </section>
+        </div>
       </ng-container>
     </div>
   `,
@@ -100,7 +145,10 @@ import { DashboardStats } from '../../core/models/event.model';
         display: grid;
         gap: 1.2rem;
       }
-      .hero-card, .recent-card, .metric-card {
+      .hero-card,
+      .alerts-card,
+      .panel-card,
+      .metric-card {
         border-radius: 32px;
         border: 1px solid var(--border);
         box-shadow: var(--shadow-sm);
@@ -150,10 +198,16 @@ import { DashboardStats } from '../../core/models/event.model';
         min-height: 240px;
         color: var(--muted);
       }
-      .metrics-grid {
+      .metrics-grid,
+      .content-grid {
         display: grid;
-        grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
         gap: 1rem;
+      }
+      .metrics-grid {
+        grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+      }
+      .content-grid {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
       }
       .metric-card mat-card-content {
         padding: 1.35rem;
@@ -161,6 +215,9 @@ import { DashboardStats } from '../../core/models/event.model';
       .metric-card.accent {
         background: linear-gradient(160deg, #a86f4d 0%, #c9ab8f 100%);
         color: #fff;
+      }
+      .metric-card.warning {
+        background: linear-gradient(160deg, #f7efe1 0%, #f0dfbf 100%);
       }
       .metric-label {
         display: block;
@@ -181,68 +238,99 @@ import { DashboardStats } from '../../core/models/event.model';
         color: inherit;
         opacity: 0.82;
       }
-      .recent-card {
-        padding: 1.6rem;
+      .alerts-card,
+      .panel-card {
+        padding: 1.5rem;
       }
-      .recent-list {
+      .section-head {
+        display: flex;
+        justify-content: space-between;
+        gap: 1rem;
+        align-items: flex-start;
+      }
+      .alerts-list,
+      .list-stack {
         display: grid;
         gap: 0.9rem;
         margin-top: 1rem;
       }
-      .recent-item {
-        display: flex;
-        justify-content: space-between;
-        gap: 1rem;
+      .alert-item,
+      .list-item {
         padding: 1rem;
         border-radius: 24px;
         background: rgba(243, 236, 226, 0.76);
       }
-      .recent-title {
+      .alert-item--high {
+        background: rgba(245, 210, 210, 0.76);
+      }
+      .alert-item strong,
+      .item-title {
+        display: inline-block;
         font-weight: 800;
-        text-decoration: none;
         color: var(--text);
       }
-      .recent-item p {
-        margin: 0.3rem 0 0;
+      .item-title {
+        text-decoration: none;
+        margin-top: 0.55rem;
+      }
+      .alert-item p,
+      .list-item p,
+      .empty-inline {
+        margin: 0.4rem 0 0;
         color: var(--muted);
       }
-      .recent-plan {
-        display: inline-flex;
-        margin-top: 0.75rem;
-        padding: 0.42rem 0.7rem;
-        border-radius: 999px;
-        background: rgba(212, 175, 122, 0.12);
-        color: var(--accent-strong);
-        font-size: 0.8rem;
-        font-weight: 700;
+      .list-item {
+        display: flex;
+        justify-content: space-between;
+        gap: 1rem;
       }
-      .recent-meta {
+      .item-meta {
         display: flex;
         flex-direction: column;
         align-items: flex-end;
-        gap: 0.4rem;
+        gap: 0.5rem;
         color: var(--text-soft);
       }
-      .recent-meta strong {
-        padding: 0.45rem 0.75rem;
+      .badge {
+        display: inline-flex;
+        padding: 0.38rem 0.7rem;
         border-radius: 999px;
-        background: rgba(168, 111, 77, 0.12);
+        font-size: 0.8rem;
+        font-weight: 800;
+      }
+      .badge-pending,
+      .badge-draft {
+        background: rgba(212, 175, 122, 0.16);
         color: var(--accent-strong);
       }
-      .empty-card {
-        display: grid;
-        place-items: center;
-        text-align: center;
-        min-height: 240px;
-        gap: 0.85rem;
+      .badge-contacted {
+        background: rgba(111, 160, 215, 0.16);
+        color: #406b9e;
       }
-      .empty-card p { color: var(--muted); }
-      @media (max-width: 760px) {
-        .hero-card, .recent-item {
-          flex-direction: column;
-          align-items: flex-start;
+      .badge-converted,
+      .badge-published {
+        background: rgba(110, 203, 141, 0.18);
+        color: #418b58;
+      }
+      .badge-rejected {
+        background: rgba(200, 72, 72, 0.14);
+        color: #b54848;
+      }
+      .empty-inline {
+        padding: 1rem 0;
+      }
+      @media (max-width: 900px) {
+        .content-grid {
+          grid-template-columns: 1fr;
         }
-        .recent-meta {
+      }
+      @media (max-width: 760px) {
+        .hero-card,
+        .section-head,
+        .list-item {
+          display: grid;
+        }
+        .item-meta {
           align-items: flex-start;
         }
       }
@@ -266,7 +354,22 @@ export class DashboardComponent implements OnInit {
     });
   }
 
-  formatStatus(value: string): string {
+  alertLabel(alert: DashboardStatItem): string {
+    return alert.severity === 'high' ? 'Atencion prioritaria' : 'Recordatorio';
+  }
+
+  contactStatusLabel(status: ContactStatus): string {
+    const labels: Record<ContactStatus, string> = {
+      pending: 'Pendiente',
+      contacted: 'Contactado',
+      converted: 'Convertido',
+      rejected: 'Rechazado',
+    };
+
+    return labels[status];
+  }
+
+  formatCategory(value: string): string {
     const map: Record<string, string> = {
       wedding: 'Boda',
       birthday: 'Cumpleanos',
@@ -277,5 +380,15 @@ export class DashboardComponent implements OnInit {
     };
 
     return map[value] || value;
+  }
+
+  formatDate(value: string): string {
+    return new Intl.DateTimeFormat('es-ES', {
+      day: '2-digit',
+      month: '2-digit',
+      year: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit',
+    }).format(new Date(value));
   }
 }

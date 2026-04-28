@@ -476,33 +476,79 @@ exports.getStatsSummary = async (req, res) => {
       [userId]
     );
 
-    const [byStatus] = await pool.query(
-      `SELECT COALESCE(category, 'other') as status, COUNT(*) as count
-       FROM events
-       WHERE userId = ?
-       GROUP BY COALESCE(category, 'other')
-       ORDER BY count DESC`,
+    const [[publishedRow]] = await pool.query(
+      'SELECT COUNT(*) as total FROM events WHERE userId = ? AND isPublished = 1',
       [userId]
     );
 
-    const [recent] = await pool.query(
+    const [[pendingContactsRow]] = await pool.query(
+      `SELECT COUNT(*) as total
+       FROM contacts c
+       INNER JOIN events e ON e.id = c.eventId
+       WHERE e.userId = ? AND c.status = 'pending'`,
+      [userId]
+    );
+
+    const [[stalePendingRow]] = await pool.query(
+      `SELECT COUNT(*) as total
+       FROM contacts c
+       INNER JOIN events e ON e.id = c.eventId
+       WHERE e.userId = ?
+       AND c.status = 'pending'
+       AND c.createdAt <= DATE_SUB(NOW(), INTERVAL 24 HOUR)`,
+      [userId]
+    );
+
+    const [recentEvents] = await pool.query(
       'SELECT * FROM events WHERE userId = ? ORDER BY createdAt DESC LIMIT 5',
       [userId]
     );
 
-    const [[thisWeekRow]] = await pool.query(
-      `SELECT COUNT(*) as count
-       FROM events
-       WHERE userId = ?
-       AND createdAt >= DATE_SUB(NOW(), INTERVAL 7 DAY)`,
+    const [recentContacts] = await pool.query(
+      `SELECT c.id, c.eventId, c.name, c.email, c.phone, c.message, c.status, c.createdAt, c.updatedAt,
+              e.title as eventTitle, e.slug as eventSlug
+       FROM contacts c
+       INNER JOIN events e ON e.id = c.eventId
+       WHERE e.userId = ?
+       ORDER BY c.createdAt DESC, c.id DESC
+       LIMIT 5`,
       [userId]
     );
 
+    const alerts = [];
+    if (pendingContactsRow.total > 0) {
+      alerts.push({
+        type: 'pending_contacts',
+        severity: stalePendingRow.total > 0 ? 'high' : 'medium',
+        count: pendingContactsRow.total,
+        message:
+          stalePendingRow.total > 0
+            ? `Tienes ${stalePendingRow.total} solicitud(es) pendiente(s) desde hace mas de 24 horas`
+            : `Tienes ${pendingContactsRow.total} solicitud(es) pendiente(s) por responder`,
+      });
+    }
+
+    if (publishedRow.total === 0 && totalRow.total > 0) {
+      alerts.push({
+        type: 'no_published_events',
+        severity: 'medium',
+        count: totalRow.total,
+        message: 'Todavia no hay eventos publicados en la parte publica',
+      });
+    }
+
     res.json({
-      total: totalRow.total,
-      byStatus,
-      recent: recent.map(normalizeEvent),
-      thisWeek: thisWeekRow.count,
+      totalEvents: totalRow.total,
+      publishedEvents: publishedRow.total,
+      pendingContacts: pendingContactsRow.total,
+      stalePendingContacts: stalePendingRow.total,
+      recentEvents: recentEvents.map(normalizeEvent),
+      recentContacts: recentContacts.map((row) => ({
+        ...normalizeContact(row),
+        eventTitle: row.eventTitle,
+        eventSlug: row.eventSlug,
+      })),
+      alerts,
     });
   } catch (error) {
     console.error('Error al obtener estadisticas:', error.message || error);
@@ -555,6 +601,11 @@ exports.getPublicEventBySlug = async (req, res) => {
 };
 
 exports.createPublicEventContact = async (req, res) => {
+  const errors = validationResult(req);
+  if (!errors.isEmpty()) {
+    return res.status(422).json({ errors: errors.array() });
+  }
+
   try {
     const [rows] = await pool.query(
       `SELECT id, slug, isPublished
@@ -575,11 +626,6 @@ exports.createPublicEventContact = async (req, res) => {
 
     if (!name || !email || !message) {
       return res.status(400).json({ error: 'Nombre, email y mensaje son obligatorios' });
-    }
-
-    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-    if (!emailRegex.test(email)) {
-      return res.status(400).json({ error: 'El email no es valido' });
     }
 
     const [result] = await pool.query(

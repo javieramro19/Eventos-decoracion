@@ -5,14 +5,44 @@ const cors = require('cors');
 const path = require('path');
 const db = require('./db/connection');
 const { initDatabase } = require('./db/init');
+const { publicRateLimit } = require('./middleware/rate-limit.middleware');
+const { sanitizeRequestInput } = require('./middleware/sanitize.middleware');
 
 const app = express();
 
+app.set('trust proxy', 1);
+
+const configuredOrigins = String(
+  process.env.FRONTEND_URLS || process.env.FRONTEND_URL || 'http://localhost:4200,http://127.0.0.1:4200'
+)
+  .split(',')
+  .map((item) => item.trim())
+  .filter(Boolean);
+
+const corsOptions = {
+  origin(origin, callback) {
+    if (!origin) {
+      callback(null, true);
+      return;
+    }
+
+    if (configuredOrigins.includes(origin)) {
+      callback(null, true);
+      return;
+    }
+
+    callback(new Error('Origen no permitido por CORS'));
+  },
+};
+
 app.use(helmet());
-app.use(cors());
+app.use(cors(corsOptions));
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 app.use('/uploads', express.static(path.join(__dirname, '..', 'uploads')));
+app.use('/api/events', sanitizeRequestInput);
+app.use('/api/admin/events', sanitizeRequestInput);
+app.use('/api/public', publicRateLimit, sanitizeRequestInput);
 
 const shouldLogRequests = String(process.env.LOG_REQUESTS || '').toLowerCase() === 'true';
 
@@ -75,6 +105,11 @@ app.get('/api/health', async (req, res) => {
 app.use((error, _req, res, next) => {
   if (!error) {
     next();
+    return;
+  }
+
+  if (error.message === 'Origen no permitido por CORS') {
+    res.status(403).json({ error: error.message });
     return;
   }
 

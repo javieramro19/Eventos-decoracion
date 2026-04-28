@@ -127,13 +127,18 @@ export interface CreateEventContactDto {
 }
 
 export interface DashboardStatItem {
-  status: string;
+  type: string;
+  severity: 'low' | 'medium' | 'high';
   count: number;
+  message: string;
 }
 
 export interface DashboardStats {
-  total: number;
-  byStatus: DashboardStatItem[];
-  recent: Evento[];
-  thisWeek: number;
+  totalEvents: number;
+  publishedEvents: number;
+  pendingContacts: number;
+  stalePendingContacts: number;
+  recentEvents: Evento[];
+  recentContacts: EventContact[];
+  alerts: DashboardStatItem[];
 }

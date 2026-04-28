@@ -76,6 +76,33 @@ const ensureGalleryTable = async () => {
   await ensureIndex('gallery', 'idx_gallery_event_active', 'CREATE INDEX idx_gallery_event_active ON gallery (eventId, isActive)');
 };
 
+const ensureContactsTable = async () => {
+  await db.query(`
+    CREATE TABLE IF NOT EXISTS contacts (
+      id INT AUTO_INCREMENT PRIMARY KEY,
+      eventId INT NOT NULL,
+      name VARCHAR(120) NOT NULL,
+      email VARCHAR(191) NOT NULL,
+      phone VARCHAR(40) NULL,
+      message TEXT NOT NULL,
+      status VARCHAR(20) NOT NULL DEFAULT 'pending',
+      createdAt TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+      updatedAt TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+      CONSTRAINT fk_contacts_event FOREIGN KEY (eventId) REFERENCES events(id) ON DELETE CASCADE
+    )
+  `);
+
+  await ensureColumn('contacts', 'name', 'VARCHAR(120) NOT NULL');
+  await ensureColumn('contacts', 'email', 'VARCHAR(191) NOT NULL');
+  await ensureColumn('contacts', 'phone', 'VARCHAR(40) NULL');
+  await ensureColumn('contacts', 'message', 'TEXT NOT NULL');
+  await ensureColumn('contacts', 'status', "VARCHAR(20) NOT NULL DEFAULT 'pending'");
+  await ensureColumn('contacts', 'createdAt', 'TIMESTAMP DEFAULT CURRENT_TIMESTAMP');
+  await ensureColumn('contacts', 'updatedAt', 'TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP');
+  await ensureIndex('contacts', 'idx_contacts_event_created', 'CREATE INDEX idx_contacts_event_created ON contacts (eventId, createdAt)');
+  await ensureIndex('contacts', 'idx_contacts_status_created', 'CREATE INDEX idx_contacts_status_created ON contacts (status, createdAt)');
+};
+
 const backfillGalleryTable = async () => {
   const [events] = await db.query('SELECT id, coverImage, imagesJson FROM events ORDER BY id ASC');
 
@@ -178,6 +205,7 @@ const initDatabase = async () => {
   await ensureUsersTable();
   await ensureEventsTable();
   await ensureGalleryTable();
+  await ensureContactsTable();
   await backfillGalleryTable();
 };
 

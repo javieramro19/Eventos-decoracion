@@ -7,6 +7,8 @@ const logEvent = (action, data) => {
   console.log('[events]', action, data);
 };
 
+const CONTACT_STATUSES = ['pending', 'contacted', 'converted', 'rejected'];
+
 const parseJsonArray = (value) => {
   if (!value) return [];
 
@@ -193,6 +195,43 @@ const sendGalleryMutationResponse = async (res, eventId, userId) => {
   });
 };
 
+const normalizeContact = (row) => ({
+  id: row.id,
+  eventId: row.eventId,
+  name: row.name,
+  email: row.email,
+  phone: row.phone,
+  message: row.message,
+  status: row.status,
+  createdAt: row.createdAt,
+  updatedAt: row.updatedAt,
+});
+
+const getContactsByEventId = async (eventId) => {
+  const [rows] = await pool.query(
+    `SELECT id, eventId, name, email, phone, message, status, createdAt, updatedAt
+     FROM contacts
+     WHERE eventId = ?
+     ORDER BY createdAt DESC, id DESC`,
+    [eventId]
+  );
+
+  return rows.map(normalizeContact);
+};
+
+const getOwnedContact = async (contactId, userId) => {
+  const [rows] = await pool.query(
+    `SELECT c.id, c.eventId, c.name, c.email, c.phone, c.message, c.status, c.createdAt, c.updatedAt
+     FROM contacts c
+     INNER JOIN events e ON e.id = c.eventId
+     WHERE c.id = ? AND e.userId = ?
+     LIMIT 1`,
+    [contactId, userId]
+  );
+
+  return rows[0] ? normalizeContact(rows[0]) : null;
+};
+
 const normalizeEvent = (row) => {
   if (!row) {
     return row;
@@ -323,6 +362,57 @@ exports.getPublicEventBySlug = async (req, res) => {
   }
 };
 
+exports.createPublicEventContact = async (req, res) => {
+  try {
+    const [rows] = await pool.query(
+      `SELECT id, slug, isPublished
+       FROM events
+       WHERE slug = ? AND isPublished = 1
+       LIMIT 1`,
+      [req.params.slug]
+    );
+
+    if (rows.length === 0) {
+      return res.status(404).json({ error: 'Evento publico no encontrado' });
+    }
+
+    const name = String(req.body?.name || '').trim();
+    const email = String(req.body?.email || '').trim().toLowerCase();
+    const phone = String(req.body?.phone || '').trim();
+    const message = String(req.body?.message || '').trim();
+
+    if (!name || !email || !message) {
+      return res.status(400).json({ error: 'Nombre, email y mensaje son obligatorios' });
+    }
+
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(email)) {
+      return res.status(400).json({ error: 'El email no es valido' });
+    }
+
+    const [result] = await pool.query(
+      `INSERT INTO contacts (eventId, name, email, phone, message, status)
+       VALUES (?, ?, ?, ?, ?, 'pending')`,
+      [rows[0].id, name, email, phone || null, message]
+    );
+
+    const [[created]] = await pool.query(
+      `SELECT id, eventId, name, email, phone, message, status, createdAt, updatedAt
+       FROM contacts
+       WHERE id = ?`,
+      [result.insertId]
+    );
+
+    res.status(201).json({
+      message: 'Solicitud enviada correctamente',
+      contact: normalizeContact(created),
+    });
+  } catch (error) {
+    console.error('Error al crear la solicitud de contacto:', error.message || error);
+    res.status(500).json({ error: 'Error al enviar la solicitud de contacto' });
+  }
+};
+
 exports.getAdminEvents = async (req, res) => {
   logEvent('getAdminEvents', { userId: req.user?.id, query: req.query });
 
@@ -382,6 +472,68 @@ exports.getAdminEventGallery = async (req, res) => {
   } catch (error) {
     console.error('Error al obtener la galeria del evento:', error.message || error);
     res.status(500).json({ error: 'Error al obtener la galeria del evento' });
+  }
+};
+
+exports.getAdminEventContacts = async (req, res) => {
+  try {
+    const event = await findOwnedEvent(req.params.id, req.user.id);
+    if (!event) {
+      return res.status(404).json({ error: 'Evento no encontrado' });
+    }
+
+    res.json(await getContactsByEventId(req.params.id));
+  } catch (error) {
+    console.error('Error al obtener los contactos del evento:', error.message || error);
+    res.status(500).json({ error: 'Error al obtener los contactos del evento' });
+  }
+};
+
+exports.getAdminContacts = async (req, res) => {
+  try {
+    const [rows] = await pool.query(
+      `SELECT c.id, c.eventId, c.name, c.email, c.phone, c.message, c.status, c.createdAt, c.updatedAt,
+              e.title as eventTitle, e.slug as eventSlug
+       FROM contacts c
+       INNER JOIN events e ON e.id = c.eventId
+       WHERE e.userId = ?
+       ORDER BY c.createdAt DESC, c.id DESC`,
+      [req.user.id]
+    );
+
+    res.json(rows.map((row) => ({
+      ...normalizeContact(row),
+      eventTitle: row.eventTitle,
+      eventSlug: row.eventSlug,
+    })));
+  } catch (error) {
+    console.error('Error al obtener las solicitudes admin:', error.message || error);
+    res.status(500).json({ error: 'Error al obtener las solicitudes admin' });
+  }
+};
+
+exports.updateAdminContactStatus = async (req, res) => {
+  try {
+    const contact = await getOwnedContact(req.params.contactId, req.user.id);
+    if (!contact) {
+      return res.status(404).json({ error: 'Solicitud no encontrada' });
+    }
+
+    const status = String(req.body?.status || '').trim().toLowerCase();
+    if (!CONTACT_STATUSES.includes(status)) {
+      return res.status(400).json({ error: 'Estado de contacto no valido' });
+    }
+
+    await pool.query(
+      'UPDATE contacts SET status = ? WHERE id = ?',
+      [status, req.params.contactId]
+    );
+
+    const updated = await getOwnedContact(req.params.contactId, req.user.id);
+    res.json(updated);
+  } catch (error) {
+    console.error('Error al actualizar el estado del contacto:', error.message || error);
+    res.status(500).json({ error: 'Error al actualizar el estado del contacto' });
   }
 };
 

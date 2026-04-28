@@ -11,6 +11,7 @@
         <a routerLink="/eventos" routerLinkActive="active">Eventos</a>
         <a *ngIf="authService.isAuthenticated()" routerLink="/admin/events" routerLinkActive="active">Panel Admin</a>
         <a *ngIf="authService.isAuthenticated()" routerLink="/admin/events" routerLinkActive="active">Mis Eventos</a>
+        <a *ngIf="authService.isAuthenticated()" routerLink="/admin/contacts" routerLinkActive="active">Solicitudes</a>
       </nav>
 
       <div class="user-block">

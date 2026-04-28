@@ -57,6 +57,10 @@ export const routes: Routes = [
         path: 'events/:id/edit',
         loadComponent: () => import('./features/admin/events-form/admin-events-form.component').then(m => m.AdminEventsFormComponent),
       },
+      {
+        path: 'contacts',
+        loadComponent: () => import('./features/admin/contacts/admin-contacts.component').then(m => m.AdminContactsComponent),
+      },
     ],
   },
   { path: 'events', pathMatch: 'full', redirectTo: 'admin/events' },

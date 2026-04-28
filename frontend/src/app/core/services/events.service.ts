@@ -2,7 +2,17 @@ import { Injectable } from '@angular/core';
 import { HttpClient, HttpParams } from '@angular/common/http';
 import { Observable } from 'rxjs';
 import { environment } from '../../../environments/environment';
-import { Evento, CreateEventoDto, UpdateEventoDto, DashboardStats, GalleryImage, GalleryMutationResponse } from '../models/event.model';
+import {
+  Evento,
+  CreateEventoDto,
+  UpdateEventoDto,
+  DashboardStats,
+  GalleryImage,
+  GalleryMutationResponse,
+  EventContact,
+  CreateEventContactDto,
+  ContactStatus,
+} from '../models/event.model';
 
 @Injectable({ providedIn: 'root' })
 export class EventoService {
@@ -48,9 +58,25 @@ export class EventoService {
     return this.http.get<Evento>(`${this.publicApiUrl}/${slug}`);
   }
 
+  createPublicEventContact(slug: string, data: CreateEventContactDto): Observable<{ message: string; contact: EventContact }> {
+    return this.http.post<{ message: string; contact: EventContact }>(`${this.publicApiUrl}/${slug}/contact`, data);
+  }
+
   togglePublish(id: number, isPublished: boolean): Observable<Evento> {
     const action = isPublished ? 'publish' : 'unpublish';
     return this.http.put<Evento>(`${this.adminApiUrl}/${id}/${action}`, {});
+  }
+
+  getAdminContacts(): Observable<EventContact[]> {
+    return this.http.get<EventContact[]>(`${this.adminApiUrl}/contacts`);
+  }
+
+  getAdminEventContacts(id: number): Observable<EventContact[]> {
+    return this.http.get<EventContact[]>(`${this.adminApiUrl}/${id}/contacts`);
+  }
+
+  updateAdminContactStatus(contactId: number, status: ContactStatus): Observable<EventContact> {
+    return this.http.put<EventContact>(`${this.adminApiUrl}/contacts/${contactId}/status`, { status });
   }
 
   getEventGallery(id: number): Observable<GalleryImage[]> {

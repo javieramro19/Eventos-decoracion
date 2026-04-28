@@ -72,6 +72,29 @@ export interface GalleryMutationResponse {
   gallery: GalleryImage[];
 }
 
+export type ContactStatus = 'pending' | 'contacted' | 'converted' | 'rejected';
+
+export interface EventContact {
+  id: number;
+  eventId: number;
+  name: string;
+  email: string;
+  phone?: string;
+  message: string;
+  status: ContactStatus;
+  createdAt: string;
+  updatedAt?: string;
+  eventTitle?: string;
+  eventSlug?: string;
+}
+
+export interface CreateEventContactDto {
+  name: string;
+  email: string;
+  phone?: string;
+  message: string;
+}
+
 export interface DashboardStatItem {
   status: string;
   count: number;

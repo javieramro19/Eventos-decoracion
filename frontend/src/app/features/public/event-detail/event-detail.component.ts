@@ -1,5 +1,6 @@
 import { Component, OnInit, signal } from '@angular/core';
 import { CommonModule } from '@angular/common';
+import { FormBuilder, ReactiveFormsModule, Validators } from '@angular/forms';
 import { ActivatedRoute, Router, RouterModule } from '@angular/router';
 import { MatButtonModule } from '@angular/material/button';
 import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
@@ -9,7 +10,7 @@ import { EventoService } from '../../../core/services/events.service';
 @Component({
   selector: 'app-public-event-detail',
   standalone: true,
-  imports: [CommonModule, RouterModule, MatButtonModule, MatProgressSpinnerModule],
+  imports: [CommonModule, ReactiveFormsModule, RouterModule, MatButtonModule, MatProgressSpinnerModule],
   template: `
     <div class="detail-shell">
       <div *ngIf="loading()" class="state-card">
@@ -29,7 +30,7 @@ import { EventoService } from '../../../core/services/events.service';
               <span *ngIf="event.location">{{ event.location }}</span>
             </div>
           </div>
-          <a mat-raised-button color="primary" routerLink="/" fragment="contacto">Solicitar presupuesto</a>
+          <a mat-raised-button color="primary" routerLink="/" fragment="contacto">Solicitar presupuesto general</a>
         </section>
 
         <section class="content-grid">
@@ -64,6 +65,49 @@ import { EventoService } from '../../../core/services/events.service';
             <a mat-stroked-button routerLink="/eventos">Volver a eventos</a>
           </article>
         </section>
+
+        <section class="contact-card">
+          <div class="contact-head">
+            <div>
+              <span class="eyebrow">Solicitar informacion</span>
+              <h2>¿Te interesa este montaje?</h2>
+              <p>Envia tu solicitud y la guardaremos directamente en el panel de administracion del evento.</p>
+            </div>
+          </div>
+
+          <form [formGroup]="contactForm" (ngSubmit)="submitContact()">
+            <div class="grid-two">
+              <div class="sonic-field">
+                <label for="contact-name">Nombre</label>
+                <input id="contact-name" formControlName="name" placeholder="Tu nombre">
+              </div>
+
+              <div class="sonic-field">
+                <label for="contact-email">Email</label>
+                <input id="contact-email" formControlName="email" type="email" placeholder="cliente@evento.com">
+              </div>
+
+              <div class="sonic-field">
+                <label for="contact-phone">Telefono</label>
+                <input id="contact-phone" formControlName="phone" placeholder="+34 600 000 000">
+              </div>
+            </div>
+
+            <div class="sonic-field">
+              <label for="contact-message">Mensaje</label>
+              <textarea id="contact-message" formControlName="message" rows="5" placeholder="Cuéntanos qué necesitas, fecha estimada y estilo del evento."></textarea>
+            </div>
+
+            <p *ngIf="contactError()" class="error-text">{{ contactError() }}</p>
+            <p *ngIf="contactSuccess()" class="success-text">{{ contactSuccess() }}</p>
+
+            <div class="contact-actions">
+              <button mat-raised-button color="primary" type="submit" [disabled]="contactForm.invalid || sendingContact()">
+                {{ sendingContact() ? 'Enviando...' : 'Enviar solicitud' }}
+              </button>
+            </div>
+          </form>
+        </section>
       </ng-container>
     </div>
   `,
@@ -78,6 +122,7 @@ import { EventoService } from '../../../core/services/events.service';
       .hero,
       .story-card,
       .gallery-card,
+      .contact-card,
       .state-card,
       .plan-card,
       .extras-card {
@@ -140,7 +185,8 @@ import { EventoService } from '../../../core/services/events.service';
         gap: 1rem;
       }
       .story-card,
-      .gallery-card {
+      .gallery-card,
+      .contact-card {
         padding: 1.5rem;
         background: rgba(255, 255, 255, 0.88);
       }
@@ -198,6 +244,31 @@ import { EventoService } from '../../../core/services/events.service';
         background-size: cover;
         background-position: center;
       }
+      .contact-head p,
+      .caption-note {
+        color: var(--text-soft);
+      }
+      form {
+        display: grid;
+        gap: 1rem;
+      }
+      .grid-two {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 1rem;
+      }
+      .contact-actions {
+        display: flex;
+        justify-content: flex-start;
+      }
+      .success-text {
+        color: #418b58;
+        font-weight: 700;
+      }
+      .error-text {
+        color: #b54848;
+        font-weight: 700;
+      }
       .state-card {
         min-height: 260px;
         display: grid;
@@ -206,19 +277,15 @@ import { EventoService } from '../../../core/services/events.service';
         text-align: center;
         background: linear-gradient(180deg, #fffdf9 0%, #f7f1ea 100%);
       }
-      .caption-note {
-        margin: 1rem 0;
-        color: var(--text-soft);
-      }
       @media (max-width: 980px) {
         .content-grid {
           grid-template-columns: 1fr;
         }
       }
       @media (max-width: 760px) {
-        .hero {
+        .hero,
+        .grid-two {
           display: grid;
-          align-items: flex-end;
         }
         .thumb-grid {
           grid-template-columns: 1fr;
@@ -230,10 +297,20 @@ import { EventoService } from '../../../core/services/events.service';
 export class PublicEventDetailComponent implements OnInit {
   item = signal<Evento | null>(null);
   loading = signal(false);
+  sendingContact = signal(false);
+  contactSuccess = signal('');
+  contactError = signal('');
   selectedImage = signal<string | null>(null);
   selectedCaption = signal<string>('');
+  contactForm = this.fb.group({
+    name: ['', [Validators.required, Validators.minLength(2)]],
+    email: ['', [Validators.required, Validators.email]],
+    phone: [''],
+    message: ['', [Validators.required, Validators.minLength(10)]],
+  });
 
   constructor(
+    private fb: FormBuilder,
     private eventsService: EventoService,
     private route: ActivatedRoute,
     private router: Router
@@ -259,6 +336,28 @@ export class PublicEventDetailComponent implements OnInit {
         this.loading.set(false);
         this.router.navigate(['/eventos']);
       },
+    });
+  }
+
+  submitContact(): void {
+    if (this.contactForm.invalid || !this.item()) {
+      this.contactForm.markAllAsTouched();
+      return;
+    }
+
+    this.sendingContact.set(true);
+    this.contactSuccess.set('');
+    this.contactError.set('');
+
+    this.eventsService.createPublicEventContact(this.item()!.slug, this.contactForm.getRawValue() as any).subscribe({
+      next: () => {
+        this.contactSuccess.set('Solicitud enviada correctamente. Te contactaremos pronto.');
+        this.contactForm.reset({ name: '', email: '', phone: '', message: '' });
+      },
+      error: (error) => {
+        this.contactError.set(error?.error?.error || 'No se pudo enviar la solicitud.');
+      },
+      complete: () => this.sendingContact.set(false),
     });
   }
 

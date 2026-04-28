@@ -1,4 +1,11 @@
 const db = require('./connection');
+const bcrypt = require('bcrypt');
+
+const ADMIN_EMAIL = 'admin@gmail.com';
+const ADMIN_PASSWORD = 'admin2006';
+const CLIENT_EMAIL = 'javier@gmail.com';
+const CLIENT_PASSWORD = 'Javier2006';
+const SALT_ROUNDS = 12;
 
 const ensureColumn = async (tableName, columnName, definition) => {
   const [rows] = await db.query(`SHOW COLUMNS FROM ${tableName} LIKE ?`, [columnName]);
@@ -46,9 +53,49 @@ const ensureUsersTable = async () => {
       name VARCHAR(100) NOT NULL,
       email VARCHAR(191) NOT NULL UNIQUE,
       password VARCHAR(255) NOT NULL,
+      role VARCHAR(20) NOT NULL DEFAULT 'client',
       createdAt TIMESTAMP DEFAULT CURRENT_TIMESTAMP
     )
   `);
+
+  await ensureColumn('users', 'role', "VARCHAR(20) NOT NULL DEFAULT 'client'");
+};
+
+const ensureDefaultUsers = async () => {
+  const adminPassword = await bcrypt.hash(ADMIN_PASSWORD, SALT_ROUNDS);
+  const [adminRows] = await db.query('SELECT id FROM users WHERE email = ? LIMIT 1', [ADMIN_EMAIL]);
+
+  if (adminRows.length === 0) {
+    await db.query(
+      'INSERT INTO users (name, email, password, role) VALUES (?, ?, ?, ?)',
+      ['Administrador', ADMIN_EMAIL, adminPassword, 'admin']
+    );
+  } else {
+    await db.query(
+      'UPDATE users SET name = ?, password = ?, role = ? WHERE email = ?',
+      ['Administrador', adminPassword, 'admin', ADMIN_EMAIL]
+    );
+  }
+
+  await db.query(
+    "UPDATE users SET role = 'client' WHERE email <> ?",
+    [ADMIN_EMAIL]
+  );
+
+  const clientPassword = await bcrypt.hash(CLIENT_PASSWORD, SALT_ROUNDS);
+  const [clientRows] = await db.query('SELECT id FROM users WHERE email = ? LIMIT 1', [CLIENT_EMAIL]);
+
+  if (clientRows.length === 0) {
+    await db.query(
+      'INSERT INTO users (name, email, password, role) VALUES (?, ?, ?, ?)',
+      ['Javier', CLIENT_EMAIL, clientPassword, 'client']
+    );
+  } else {
+    await db.query(
+      "UPDATE users SET name = COALESCE(NULLIF(name, ''), 'Javier'), role = 'client' WHERE email = ?",
+      [CLIENT_EMAIL]
+    );
+  }
 };
 
 const ensureGalleryTable = async () => {
@@ -294,6 +341,7 @@ const ensureEventsTable = async () => {
 
 const initDatabase = async () => {
   await ensureUsersTable();
+  await ensureDefaultUsers();
   await ensureEventsTable();
   await ensureGalleryTable();
   await ensureContactsTable();

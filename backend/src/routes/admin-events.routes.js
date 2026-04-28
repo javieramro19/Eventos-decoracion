@@ -1,10 +1,11 @@
 const router = require('express').Router();
 const controller = require('../controllers/events.controller');
-const { authMiddleware } = require('../middleware/auth.middleware');
+const { authMiddleware, adminOnlyMiddleware } = require('../middleware/auth.middleware');
 const { uploadGalleryImages } = require('../middleware/upload.middleware');
 const { createEventoValidators, updateEventoValidators } = require('../validators/events.validators');
 
 router.use(authMiddleware);
+router.use(adminOnlyMiddleware);
 
 router.get('/stats/summary', controller.getStatsSummary);
 router.get('/contacts', controller.getAdminContacts);

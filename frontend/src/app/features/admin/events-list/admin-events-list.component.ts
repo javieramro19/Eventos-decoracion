@@ -53,6 +53,7 @@ import { EventoService } from '../../../core/services/events.service';
               <div>
                 <h3>{{ item.title }}</h3>
                 <p>{{ item.slug }}</p>
+                <span class="owner-chip" *ngIf="item.ownerEmail">{{ item.ownerEmail }}</span>
               </div>
             </div>
 
@@ -193,6 +194,16 @@ import { EventoService } from '../../../core/services/events.service';
         margin: 0.35rem 0 0;
         font-size: 0.9rem;
         overflow-wrap: anywhere;
+      }
+      .owner-chip {
+        display: inline-flex;
+        margin-top: 0.5rem;
+        padding: 0.34rem 0.58rem;
+        border-radius: 8px;
+        background: rgba(44, 44, 44, 0.06);
+        color: var(--text-soft);
+        font-size: 0.82rem;
+        font-weight: 800;
       }
       .meta-cell {
         display: grid;

@@ -134,7 +134,7 @@ label {
 button {
   cursor: pointer;
   border: none;
-  border-radius: 999px;
+  border-radius: 10px;
   padding: 12px 28px;
   font-family: var(--font-body);
   font-size: 1rem;
@@ -229,7 +229,7 @@ button:active {
 
 .btn {
   display: inline-block;
-  border-radius: 999px;
+  border-radius: 10px;
   padding: 12px 28px;
   font-family: var(--font-body);
   font-size: 1rem;
@@ -339,7 +339,9 @@ button:active {
 .mat-mdc-outlined-button,
 .mat-mdc-unelevated-button,
 .mat-mdc-raised-button {
-  border-radius: 999px !important;
+  min-height: 42px;
+  border-radius: 10px !important;
+  font-weight: 800 !important;
 }
 
 .mat-mdc-outlined-button:not(:disabled) {

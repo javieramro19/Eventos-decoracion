@@ -216,7 +216,7 @@ export class RegisterComponent {
     this.eventsService.create(this.planDraftService.toCreateEventoDto(draft)).subscribe({
       next: (event) => {
         this.planDraftService.clear();
-        this.router.navigate(['/events', event.id]);
+        this.router.navigate(['/dashboard']);
       },
       error: () => {
         this.loading = false;

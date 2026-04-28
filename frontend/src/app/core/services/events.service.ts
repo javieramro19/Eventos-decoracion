@@ -20,6 +20,7 @@ import {
 @Injectable({ providedIn: 'root' })
 export class EventoService {
   private adminApiUrl = `${environment.apiUrl}/admin/events`;
+  private clientApiUrl = `${environment.apiUrl}/events`;
   private publicApiUrl = `${environment.apiUrl}/public/events`;
   private assetsBaseUrl = environment.apiUrl.replace(/\/api$/, '');
 
@@ -41,6 +42,10 @@ export class EventoService {
     return this.http.post<Evento>(this.adminApiUrl, data);
   }
 
+  createClientEvent(data: CreateEventoDto): Observable<Evento> {
+    return this.http.post<Evento>(this.clientApiUrl, data);
+  }
+
   updateAdminEvent(id: number, data: UpdateEventoDto): Observable<Evento> {
     return this.http.put<Evento>(`${this.adminApiUrl}/${id}`, data);
   }
@@ -50,6 +55,10 @@ export class EventoService {
   }
 
   getDashboardStats(): Observable<DashboardStats> {
+    return this.http.get<DashboardStats>(`${this.clientApiUrl}/stats/summary`);
+  }
+
+  getAdminDashboardStats(): Observable<DashboardStats> {
     return this.http.get<DashboardStats>(`${this.adminApiUrl}/stats/summary`);
   }
 
@@ -148,7 +157,7 @@ export class EventoService {
   }
 
   create(data: CreateEventoDto): Observable<Evento> {
-    return this.createAdminEvent(data);
+    return this.createClientEvent(data);
   }
 
   update(id: number, data: UpdateEventoDto): Observable<Evento> {

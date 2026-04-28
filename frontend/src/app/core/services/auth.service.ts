@@ -8,6 +8,7 @@ export interface User {
   id: number;
   name: string;
   email: string;
+  role: 'admin' | 'client';
 }
 
 @Injectable({ providedIn: 'root' })
@@ -48,6 +49,15 @@ export class AuthService {
 
   isAuthenticated(): boolean {
     return !!localStorage.getItem('token');
+  }
+
+  isAdmin(): boolean {
+    const user = this.currentUser();
+    return user?.role === 'admin' || user?.email?.toLowerCase() === 'admin@gmail.com';
+  }
+
+  isClient(): boolean {
+    return this.isAuthenticated() && !this.isAdmin();
   }
 
   getToken(): string | null {

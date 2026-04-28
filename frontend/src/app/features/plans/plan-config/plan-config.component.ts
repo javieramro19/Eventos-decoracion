@@ -323,7 +323,7 @@ export class PlanConfigComponent implements OnInit {
       next: (event) => {
         this.planDraftService.clear();
         this.feedback.set('Plan confirmado y guardado en tu panel.');
-        this.router.navigate(['/events', event.id]);
+        this.router.navigate(this.authService.isAdmin() ? ['/admin/events', event.id, 'edit'] : ['/dashboard']);
       },
       error: () => {
         this.saving.set(false);

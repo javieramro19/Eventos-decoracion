@@ -1,5 +1,6 @@
 const pool = require('../db/connection');
 const { validationResult } = require('express-validator');
+const { isAdminUser } = require('../middleware/auth.middleware');
 
 const shouldLogControllers = String(process.env.LOG_CONTROLLERS || '').toLowerCase() === 'true';
 const logEvent = (action, data) => {
@@ -296,14 +297,23 @@ const syncSectionDefaultsFromEvent = async (previousEvent, nextEvent) => {
   }
 };
 
-const getOwnedSection = async (sectionId, eventId, userId) => {
+const getOwnedSection = async (sectionId, eventId, userOrId) => {
+  const user = typeof userOrId === 'object' ? userOrId : { id: userOrId };
+  const params = [sectionId, eventId];
+  let scope = '';
+
+  if (!isAdminUser(user)) {
+    scope = ' AND e.userId = ?';
+    params.push(user.id);
+  }
+
   const [rows] = await pool.query(
     `SELECT s.id, s.eventId, s.type, s.content, s.isActive, s.\`order\`, s.createdAt, s.updatedAt
      FROM sections s
      INNER JOIN events e ON e.id = s.eventId
-     WHERE s.id = ? AND s.eventId = ? AND e.userId = ?
+     WHERE s.id = ? AND s.eventId = ?${scope}
      LIMIT 1`,
-    [sectionId, eventId, userId]
+    params
   );
 
   return rows[0] ? normalizeSection(rows[0]) : null;
@@ -365,8 +375,8 @@ const replaceGalleryFromImageUrls = async (eventId, imageUrls = []) => {
   return syncEventGallerySnapshot(eventId);
 };
 
-const sendGalleryMutationResponse = async (res, eventId, userId) => {
-  const event = await findOwnedEvent(eventId, userId);
+const sendGalleryMutationResponse = async (res, eventId, user) => {
+  const event = await findOwnedEvent(eventId, user);
   const gallery = await getGalleryRowsByEventId(eventId, { includeInactive: true });
 
   res.json({
@@ -404,14 +414,23 @@ const getContactsByEventId = async (eventId) => {
   return rows.map(normalizeContact);
 };
 
-const getOwnedContact = async (contactId, userId) => {
+const getOwnedContact = async (contactId, userOrId) => {
+  const user = typeof userOrId === 'object' ? userOrId : { id: userOrId };
+  const params = [contactId];
+  let scope = '';
+
+  if (!isAdminUser(user)) {
+    scope = ' AND e.userId = ?';
+    params.push(user.id);
+  }
+
   const [rows] = await pool.query(
     `SELECT c.id, c.eventId, c.name, c.email, c.phone, c.message, c.status, c.createdAt, c.updatedAt
      FROM contacts c
      INNER JOIN events e ON e.id = c.eventId
-     WHERE c.id = ? AND e.userId = ?
+     WHERE c.id = ?${scope}
      LIMIT 1`,
-    [contactId, userId]
+    params
   );
 
   return rows[0] ? normalizeContact(rows[0]) : null;
@@ -433,6 +452,8 @@ const normalizeEvent = (row) => {
     totalPrice: row.totalPrice !== null ? Number(row.totalPrice) : null,
     selectedExtras,
     images,
+    ownerName: row.ownerName,
+    ownerEmail: row.ownerEmail,
   };
 };
 
@@ -456,10 +477,29 @@ const mapEventPayload = (body) => ({
   source: body.source?.trim() || 'manual',
 });
 
-const findOwnedEvent = async (id, userId) => {
+const findOwnedEvent = async (id, userOrId) => {
+  const user = typeof userOrId === 'object' ? userOrId : { id: userOrId };
+
+  if (isAdminUser(user)) {
+    const [rows] = await pool.query(
+      `SELECT e.*, u.name as ownerName, u.email as ownerEmail
+       FROM events e
+       INNER JOIN users u ON u.id = e.userId
+       WHERE e.id = ?
+       LIMIT 1`,
+      [id]
+    );
+
+    return rows[0] || null;
+  }
+
   const [rows] = await pool.query(
-    'SELECT * FROM events WHERE id = ? AND userId = ? LIMIT 1',
-    [id, userId]
+    `SELECT e.*, u.name as ownerName, u.email as ownerEmail
+     FROM events e
+     INNER JOIN users u ON u.id = e.userId
+     WHERE e.id = ? AND e.userId = ?
+     LIMIT 1`,
+    [id, user.id]
   );
 
   return rows[0] || null;
@@ -469,50 +509,59 @@ exports.getStatsSummary = async (req, res) => {
   logEvent('getStatsSummary', { userId: req.user?.id });
 
   try {
-    const userId = req.user.id;
+    const admin = isAdminUser(req.user);
+    const eventScope = admin ? '' : 'WHERE userId = ?';
+    const eventParams = admin ? [] : [req.user.id];
+    const contactScope = admin ? '' : 'WHERE e.userId = ?';
+    const contactParams = admin ? [] : [req.user.id];
 
     const [[totalRow]] = await pool.query(
-      'SELECT COUNT(*) as total FROM events WHERE userId = ?',
-      [userId]
+      `SELECT COUNT(*) as total FROM events ${eventScope}`,
+      eventParams
     );
 
     const [[publishedRow]] = await pool.query(
-      'SELECT COUNT(*) as total FROM events WHERE userId = ? AND isPublished = 1',
-      [userId]
+      `SELECT COUNT(*) as total FROM events ${admin ? 'WHERE' : `${eventScope} AND`} isPublished = 1`,
+      eventParams
     );
 
     const [[pendingContactsRow]] = await pool.query(
       `SELECT COUNT(*) as total
        FROM contacts c
        INNER JOIN events e ON e.id = c.eventId
-       WHERE e.userId = ? AND c.status = 'pending'`,
-      [userId]
+       ${admin ? 'WHERE' : `${contactScope} AND`} c.status = 'pending'`,
+      contactParams
     );
 
     const [[stalePendingRow]] = await pool.query(
       `SELECT COUNT(*) as total
        FROM contacts c
        INNER JOIN events e ON e.id = c.eventId
-       WHERE e.userId = ?
-       AND c.status = 'pending'
+       ${admin ? 'WHERE' : `${contactScope} AND`} c.status = 'pending'
        AND c.createdAt <= DATE_SUB(NOW(), INTERVAL 24 HOUR)`,
-      [userId]
+      contactParams
     );
 
     const [recentEvents] = await pool.query(
-      'SELECT * FROM events WHERE userId = ? ORDER BY createdAt DESC LIMIT 5',
-      [userId]
+      `SELECT e.*, u.name as ownerName, u.email as ownerEmail
+       FROM events e
+       INNER JOIN users u ON u.id = e.userId
+       ${admin ? '' : 'WHERE e.userId = ?'}
+       ORDER BY e.createdAt DESC
+       LIMIT 5`,
+      eventParams
     );
 
     const [recentContacts] = await pool.query(
       `SELECT c.id, c.eventId, c.name, c.email, c.phone, c.message, c.status, c.createdAt, c.updatedAt,
-              e.title as eventTitle, e.slug as eventSlug
+              e.title as eventTitle, e.slug as eventSlug, u.email as ownerEmail
        FROM contacts c
        INNER JOIN events e ON e.id = c.eventId
-       WHERE e.userId = ?
+       INNER JOIN users u ON u.id = e.userId
+       ${admin ? '' : 'WHERE e.userId = ?'}
        ORDER BY c.createdAt DESC, c.id DESC
        LIMIT 5`,
-      [userId]
+      contactParams
     );
 
     const alerts = [];
@@ -547,6 +596,7 @@ exports.getStatsSummary = async (req, res) => {
         ...normalizeContact(row),
         eventTitle: row.eventTitle,
         eventSlug: row.eventSlug,
+        ownerEmail: row.ownerEmail,
       })),
       alerts,
     });
@@ -659,21 +709,27 @@ exports.getAdminEvents = async (req, res) => {
     const safePage = Math.max(parseInt(page, 10) || 1, 1);
     const safeLimit = Math.min(Math.max(parseInt(limit, 10) || 30, 1), 100);
     const offset = (safePage - 1) * safeLimit;
+    const admin = isAdminUser(req.user);
 
-    let query = 'SELECT * FROM events WHERE userId = ?';
-    const params = [req.user.id];
+    let query = `
+      SELECT e.*, u.name as ownerName, u.email as ownerEmail
+      FROM events e
+      INNER JOIN users u ON u.id = e.userId
+      ${admin ? 'WHERE 1 = 1' : 'WHERE e.userId = ?'}
+    `;
+    const params = admin ? [] : [req.user.id];
 
     if (category) {
-      query += ' AND category = ?';
+      query += ' AND e.category = ?';
       params.push(category);
     }
 
     if (search) {
-      query += ' AND (title LIKE ? OR description LIKE ? OR location LIKE ? OR planName LIKE ? OR slug LIKE ?)';
-      params.push(`%${search}%`, `%${search}%`, `%${search}%`, `%${search}%`, `%${search}%`);
+      query += ' AND (e.title LIKE ? OR e.description LIKE ? OR e.location LIKE ? OR e.planName LIKE ? OR e.slug LIKE ? OR u.email LIKE ?)';
+      params.push(`%${search}%`, `%${search}%`, `%${search}%`, `%${search}%`, `%${search}%`, `%${search}%`);
     }
 
-    query += ' ORDER BY COALESCE(eventDate, createdAt) DESC, createdAt DESC LIMIT ? OFFSET ?';
+    query += ' ORDER BY COALESCE(e.eventDate, e.createdAt) DESC, e.createdAt DESC LIMIT ? OFFSET ?';
     params.push(safeLimit, offset);
 
     const [rows] = await pool.query(query, params);
@@ -686,7 +742,7 @@ exports.getAdminEvents = async (req, res) => {
 
 exports.getAdminEventById = async (req, res) => {
   try {
-    const event = await findOwnedEvent(req.params.id, req.user.id);
+    const event = await findOwnedEvent(req.params.id, req.user);
 
     if (!event) {
       return res.status(404).json({ error: 'Evento no encontrado' });
@@ -708,7 +764,7 @@ exports.getAdminEventById = async (req, res) => {
 
 exports.getAdminEventSections = async (req, res) => {
   try {
-    const event = await findOwnedEvent(req.params.id, req.user.id);
+    const event = await findOwnedEvent(req.params.id, req.user);
     if (!event) {
       return res.status(404).json({ error: 'Evento no encontrado' });
     }
@@ -723,7 +779,7 @@ exports.getAdminEventSections = async (req, res) => {
 
 exports.getAdminEventGallery = async (req, res) => {
   try {
-    const event = await findOwnedEvent(req.params.id, req.user.id);
+    const event = await findOwnedEvent(req.params.id, req.user);
     if (!event) {
       return res.status(404).json({ error: 'Evento no encontrado' });
     }
@@ -737,7 +793,7 @@ exports.getAdminEventGallery = async (req, res) => {
 
 exports.getAdminEventContacts = async (req, res) => {
   try {
-    const event = await findOwnedEvent(req.params.id, req.user.id);
+    const event = await findOwnedEvent(req.params.id, req.user);
     if (!event) {
       return res.status(404).json({ error: 'Evento no encontrado' });
     }
@@ -751,20 +807,23 @@ exports.getAdminEventContacts = async (req, res) => {
 
 exports.getAdminContacts = async (req, res) => {
   try {
+    const admin = isAdminUser(req.user);
     const [rows] = await pool.query(
       `SELECT c.id, c.eventId, c.name, c.email, c.phone, c.message, c.status, c.createdAt, c.updatedAt,
-              e.title as eventTitle, e.slug as eventSlug
+              e.title as eventTitle, e.slug as eventSlug, u.email as ownerEmail
        FROM contacts c
        INNER JOIN events e ON e.id = c.eventId
-       WHERE e.userId = ?
+       INNER JOIN users u ON u.id = e.userId
+       ${admin ? '' : 'WHERE e.userId = ?'}
        ORDER BY c.createdAt DESC, c.id DESC`,
-      [req.user.id]
+      admin ? [] : [req.user.id]
     );
 
     res.json(rows.map((row) => ({
       ...normalizeContact(row),
       eventTitle: row.eventTitle,
       eventSlug: row.eventSlug,
+      ownerEmail: row.ownerEmail,
     })));
   } catch (error) {
     console.error('Error al obtener las solicitudes admin:', error.message || error);
@@ -774,7 +833,7 @@ exports.getAdminContacts = async (req, res) => {
 
 exports.updateAdminContactStatus = async (req, res) => {
   try {
-    const contact = await getOwnedContact(req.params.contactId, req.user.id);
+    const contact = await getOwnedContact(req.params.contactId, req.user);
     if (!contact) {
       return res.status(404).json({ error: 'Solicitud no encontrada' });
     }
@@ -789,7 +848,7 @@ exports.updateAdminContactStatus = async (req, res) => {
       [status, req.params.contactId]
     );
 
-    const updated = await getOwnedContact(req.params.contactId, req.user.id);
+    const updated = await getOwnedContact(req.params.contactId, req.user);
     res.json(updated);
   } catch (error) {
     console.error('Error al actualizar el estado del contacto:', error.message || error);
@@ -842,7 +901,7 @@ exports.createAdminEvent = async (req, res) => {
       await replaceGalleryFromImageUrls(result.insertId, payload.images);
     }
 
-    const created = await findOwnedEvent(result.insertId, req.user.id);
+    const created = await findOwnedEvent(result.insertId, req.user);
     await ensureEventSections(created);
     res.status(201).json(
       await buildEventResponse(created, {
@@ -867,7 +926,7 @@ exports.updateAdminEvent = async (req, res) => {
   }
 
   try {
-    const current = await findOwnedEvent(req.params.id, req.user.id);
+    const current = await findOwnedEvent(req.params.id, req.user);
     if (!current) {
       return res.status(404).json({ error: 'Evento no encontrado' });
     }
@@ -908,9 +967,12 @@ exports.updateAdminEvent = async (req, res) => {
       return res.status(400).json({ error: 'No hay campos validos para actualizar' });
     }
 
-    values.push(req.params.id, req.user.id);
+    values.push(req.params.id);
+    if (!isAdminUser(req.user)) {
+      values.push(req.user.id);
+    }
     await pool.query(
-      `UPDATE events SET ${fields.join(', ')} WHERE id = ? AND userId = ?`,
+      `UPDATE events SET ${fields.join(', ')} WHERE id = ?${isAdminUser(req.user) ? '' : ' AND userId = ?'}`,
       values
     );
 
@@ -918,7 +980,7 @@ exports.updateAdminEvent = async (req, res) => {
       await replaceGalleryFromImageUrls(req.params.id, payload.images);
     }
 
-    const updated = await findOwnedEvent(req.params.id, req.user.id);
+    const updated = await findOwnedEvent(req.params.id, req.user);
     await syncSectionDefaultsFromEvent(current, updated);
     await ensureEventSections(updated);
     res.json(
@@ -937,7 +999,7 @@ exports.updateAdminEvent = async (req, res) => {
 
 exports.uploadAdminEventGalleryImages = async (req, res) => {
   try {
-    const event = await findOwnedEvent(req.params.id, req.user.id);
+    const event = await findOwnedEvent(req.params.id, req.user);
     if (!event) {
       return res.status(404).json({ error: 'Evento no encontrado' });
     }
@@ -962,7 +1024,7 @@ exports.uploadAdminEventGalleryImages = async (req, res) => {
     }
 
     await syncEventGallerySnapshot(req.params.id);
-    return sendGalleryMutationResponse(res, req.params.id, req.user.id);
+    return sendGalleryMutationResponse(res, req.params.id, req.user);
   } catch (error) {
     console.error('Error al subir imagenes a la galeria:', error.message || error);
     res.status(500).json({ error: 'Error al subir imagenes a la galeria' });
@@ -971,7 +1033,7 @@ exports.uploadAdminEventGalleryImages = async (req, res) => {
 
 exports.reorderAdminEventGallery = async (req, res) => {
   try {
-    const event = await findOwnedEvent(req.params.id, req.user.id);
+    const event = await findOwnedEvent(req.params.id, req.user);
     if (!event) {
       return res.status(404).json({ error: 'Evento no encontrado' });
     }
@@ -997,7 +1059,7 @@ exports.reorderAdminEventGallery = async (req, res) => {
     }
 
     await syncEventGallerySnapshot(req.params.id);
-    return sendGalleryMutationResponse(res, req.params.id, req.user.id);
+    return sendGalleryMutationResponse(res, req.params.id, req.user);
   } catch (error) {
     console.error('Error al reordenar la galeria:', error.message || error);
     res.status(500).json({ error: 'Error al reordenar la galeria' });
@@ -1006,7 +1068,7 @@ exports.reorderAdminEventGallery = async (req, res) => {
 
 exports.updateAdminEventGalleryImage = async (req, res) => {
   try {
-    const event = await findOwnedEvent(req.params.id, req.user.id);
+    const event = await findOwnedEvent(req.params.id, req.user);
     if (!event) {
       return res.status(404).json({ error: 'Evento no encontrado' });
     }
@@ -1044,7 +1106,7 @@ exports.updateAdminEventGalleryImage = async (req, res) => {
     );
 
     await syncEventGallerySnapshot(req.params.id);
-    return sendGalleryMutationResponse(res, req.params.id, req.user.id);
+    return sendGalleryMutationResponse(res, req.params.id, req.user);
   } catch (error) {
     console.error('Error al actualizar la imagen de la galeria:', error.message || error);
     res.status(500).json({ error: 'Error al actualizar la imagen de la galeria' });
@@ -1053,7 +1115,7 @@ exports.updateAdminEventGalleryImage = async (req, res) => {
 
 exports.removeAdminEventGalleryImage = async (req, res) => {
   try {
-    const event = await findOwnedEvent(req.params.id, req.user.id);
+    const event = await findOwnedEvent(req.params.id, req.user);
     if (!event) {
       return res.status(404).json({ error: 'Evento no encontrado' });
     }
@@ -1064,7 +1126,7 @@ exports.removeAdminEventGalleryImage = async (req, res) => {
     );
 
     await syncEventGallerySnapshot(req.params.id);
-    return sendGalleryMutationResponse(res, req.params.id, req.user.id);
+    return sendGalleryMutationResponse(res, req.params.id, req.user);
   } catch (error) {
     console.error('Error al eliminar la imagen de la galeria:', error.message || error);
     res.status(500).json({ error: 'Error al eliminar la imagen de la galeria' });
@@ -1073,7 +1135,7 @@ exports.removeAdminEventGalleryImage = async (req, res) => {
 
 exports.reorderAdminEventSections = async (req, res) => {
   try {
-    const event = await findOwnedEvent(req.params.id, req.user.id);
+    const event = await findOwnedEvent(req.params.id, req.user);
     if (!event) {
       return res.status(404).json({ error: 'Evento no encontrado' });
     }
@@ -1109,13 +1171,13 @@ exports.reorderAdminEventSections = async (req, res) => {
 
 exports.updateAdminEventSection = async (req, res) => {
   try {
-    const event = await findOwnedEvent(req.params.id, req.user.id);
+    const event = await findOwnedEvent(req.params.id, req.user);
     if (!event) {
       return res.status(404).json({ error: 'Evento no encontrado' });
     }
 
     await ensureEventSections(event);
-    const section = await getOwnedSection(req.params.sectionId, req.params.id, req.user.id);
+    const section = await getOwnedSection(req.params.sectionId, req.params.id, req.user);
     if (!section) {
       return res.status(404).json({ error: 'Seccion no encontrada' });
     }
@@ -1144,7 +1206,7 @@ exports.updateAdminEventSection = async (req, res) => {
       values
     );
 
-    const updated = await getOwnedSection(req.params.sectionId, req.params.id, req.user.id);
+    const updated = await getOwnedSection(req.params.sectionId, req.params.id, req.user);
     res.json(updated);
   } catch (error) {
     console.error('Error al actualizar la seccion del evento:', error.message || error);
@@ -1154,17 +1216,17 @@ exports.updateAdminEventSection = async (req, res) => {
 
 exports.publishAdminEvent = async (req, res) => {
   try {
-    const current = await findOwnedEvent(req.params.id, req.user.id);
+    const current = await findOwnedEvent(req.params.id, req.user);
     if (!current) {
       return res.status(404).json({ error: 'Evento no encontrado' });
     }
 
     await pool.query(
-      'UPDATE events SET isPublished = 1 WHERE id = ? AND userId = ?',
-      [req.params.id, req.user.id]
+      `UPDATE events SET isPublished = 1 WHERE id = ?${isAdminUser(req.user) ? '' : ' AND userId = ?'}`,
+      isAdminUser(req.user) ? [req.params.id] : [req.params.id, req.user.id]
     );
 
-    const updated = await findOwnedEvent(req.params.id, req.user.id);
+    const updated = await findOwnedEvent(req.params.id, req.user);
     res.json(normalizeEvent(updated));
   } catch (error) {
     console.error('Error al publicar el evento:', error.message || error);
@@ -1174,17 +1236,17 @@ exports.publishAdminEvent = async (req, res) => {
 
 exports.unpublishAdminEvent = async (req, res) => {
   try {
-    const current = await findOwnedEvent(req.params.id, req.user.id);
+    const current = await findOwnedEvent(req.params.id, req.user);
     if (!current) {
       return res.status(404).json({ error: 'Evento no encontrado' });
     }
 
     await pool.query(
-      'UPDATE events SET isPublished = 0 WHERE id = ? AND userId = ?',
-      [req.params.id, req.user.id]
+      `UPDATE events SET isPublished = 0 WHERE id = ?${isAdminUser(req.user) ? '' : ' AND userId = ?'}`,
+      isAdminUser(req.user) ? [req.params.id] : [req.params.id, req.user.id]
     );
 
-    const updated = await findOwnedEvent(req.params.id, req.user.id);
+    const updated = await findOwnedEvent(req.params.id, req.user);
     res.json(normalizeEvent(updated));
   } catch (error) {
     console.error('Error al despublicar el evento:', error.message || error);
@@ -1194,14 +1256,14 @@ exports.unpublishAdminEvent = async (req, res) => {
 
 exports.removeAdminEvent = async (req, res) => {
   try {
-    const current = await findOwnedEvent(req.params.id, req.user.id);
+    const current = await findOwnedEvent(req.params.id, req.user);
     if (!current) {
       return res.status(404).json({ error: 'Evento no encontrado' });
     }
 
     await pool.query(
-      'DELETE FROM events WHERE id = ? AND userId = ?',
-      [req.params.id, req.user.id]
+      `DELETE FROM events WHERE id = ?${isAdminUser(req.user) ? '' : ' AND userId = ?'}`,
+      isAdminUser(req.user) ? [req.params.id] : [req.params.id, req.user.id]
     );
 
     res.json({ message: 'Evento eliminado correctamente' });

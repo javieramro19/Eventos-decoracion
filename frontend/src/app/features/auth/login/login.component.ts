@@ -1,7 +1,7 @@
 import { Component } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormBuilder, ReactiveFormsModule, Validators } from '@angular/forms';
-import { Router, RouterModule } from '@angular/router';
+import { ActivatedRoute, Router, RouterModule } from '@angular/router';
 import { MatButtonModule } from '@angular/material/button';
 import { AuthService } from '../../../core/services/auth.service';
 import { EventoService } from '../../../core/services/events.service';
@@ -174,7 +174,8 @@ export class LoginComponent {
     private authService: AuthService,
     private eventsService: EventoService,
     public planDraftService: PlanDraftService,
-    private router: Router
+    private router: Router,
+    private route: ActivatedRoute
   ) {}
 
   onSubmit(): void {
@@ -196,22 +197,24 @@ export class LoginComponent {
   }
 
   private handlePostAuth(): void {
+    const fallbackUrl = this.authService.isAdmin() ? '/admin/events' : '/dashboard';
+    const returnUrl = this.route.snapshot.queryParamMap.get('returnUrl') || fallbackUrl;
     const draft = this.planDraftService.get();
     if (!draft) {
       this.loading = false;
-      this.router.navigate(['/dashboard']);
+      this.router.navigateByUrl(this.authService.isAdmin() ? '/admin/events' : returnUrl);
       return;
     }
 
     this.eventsService.create(this.planDraftService.toCreateEventoDto(draft)).subscribe({
       next: (event) => {
         this.planDraftService.clear();
-        this.router.navigate(['/events', event.id]);
+        this.router.navigate(this.authService.isAdmin() ? ['/admin/events', event.id, 'edit'] : ['/dashboard']);
       },
       error: () => {
         this.loading = false;
         this.errorMessage = 'La sesion se inicio, pero no pudimos guardar el plan pendiente.';
-        this.router.navigate(['/dashboard']);
+        this.router.navigateByUrl(returnUrl);
       },
     });
   }

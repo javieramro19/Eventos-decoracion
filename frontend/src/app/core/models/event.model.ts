@@ -24,6 +24,8 @@ export interface Evento {
   source?: string;
   createdAt: string;
   updatedAt?: string;
+  ownerName?: string;
+  ownerEmail?: string;
 }
 
 export interface GalleryImage {
@@ -117,6 +119,7 @@ export interface EventContact {
   updatedAt?: string;
   eventTitle?: string;
   eventSlug?: string;
+  ownerEmail?: string;
 }
 
 export interface CreateEventContactDto {

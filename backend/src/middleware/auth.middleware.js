@@ -1,5 +1,10 @@
 const jwt = require('jsonwebtoken');
 
+const ADMIN_EMAIL = 'admin@gmail.com';
+
+const isAdminUser = (user = {}) =>
+  user.role === 'admin' || String(user.email || '').toLowerCase() === ADMIN_EMAIL;
+
 exports.authMiddleware = (req, res, next) => {
   const authHeader = req.get('Authorization');
   if (!authHeader) {
@@ -21,3 +26,13 @@ exports.authMiddleware = (req, res, next) => {
     return res.status(401).json({ error: 'Token inválido' });
   }
 };
+
+exports.adminOnlyMiddleware = (req, res, next) => {
+  if (!isAdminUser(req.user)) {
+    return res.status(403).json({ error: 'Solo el administrador puede acceder a este entorno' });
+  }
+
+  next();
+};
+
+exports.isAdminUser = isAdminUser;

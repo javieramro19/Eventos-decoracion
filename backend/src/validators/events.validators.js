@@ -31,6 +31,12 @@ const sharedPlanValidators = [
   body('selectedExtras')
     .optional({ nullable: true })
     .isArray({ max: 20 }).withMessage('Los extras seleccionados no son validos'),
+  body('images')
+    .optional({ nullable: true })
+    .isArray({ max: 20 }).withMessage('La galeria de imagenes no es valida'),
+  body('images.*')
+    .optional()
+    .isLength({ max: 500 }).withMessage('La URL de imagen es demasiado larga'),
   body('selectedExtras.*.id')
     .optional()
     .isLength({ max: 80 }).withMessage('El id del extra no es valido'),
@@ -68,6 +74,13 @@ exports.createEventoValidators = [
   body('category')
     .optional({ nullable: true, checkFalsy: true })
     .isIn(allowedCategories).withMessage('La categoria seleccionada no es valida'),
+  body('isPublished')
+    .optional()
+    .isBoolean().withMessage('El estado de publicacion debe ser booleano'),
+  body('coverImage')
+    .optional({ nullable: true })
+    .isLength({ max: 500 }).withMessage('La imagen de portada no puede superar 500 caracteres')
+    .trim(),
   ...sharedPlanValidators,
 ];
 

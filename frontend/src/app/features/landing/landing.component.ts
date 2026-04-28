@@ -63,10 +63,18 @@ export class LandingComponent {
   ];
 
   get authRoute(): string {
-    return this.authService.isAuthenticated() ? '/dashboard' : '/auth/login';
+    if (!this.authService.isAuthenticated()) {
+      return '/auth/login';
+    }
+
+    return this.authService.isAdmin() ? '/admin/events' : '/dashboard';
   }
 
   get authLabel(): string {
-    return this.authService.isAuthenticated() ? 'Ir a mi panel' : 'Iniciar sesion / Crear cuenta';
+    if (!this.authService.isAuthenticated()) {
+      return 'Iniciar sesion / Crear cuenta';
+    }
+
+    return this.authService.isAdmin() ? 'Ir al admin' : 'Ir a mi panel';
   }
 }

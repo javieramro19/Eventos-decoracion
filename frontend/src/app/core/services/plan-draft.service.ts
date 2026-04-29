@@ -2,6 +2,7 @@ import { Injectable } from '@angular/core';
 import { CreateEventoDto, PlanSelectionExtra } from '../models/event.model';
 
 export interface PendingPlanDraft {
+  eventTitle: string;
   planId: string;
   planName: string;
   planSummary: string;
@@ -54,7 +55,7 @@ export class PlanDraftService {
     ].filter(Boolean);
 
     return {
-      title: `Solicitud ${draft.planName}`,
+      title: draft.eventTitle.trim() || `Solicitud ${draft.planName}`,
       description: descriptionParts.join(' '),
       category: 'other',
       planId: draft.planId,

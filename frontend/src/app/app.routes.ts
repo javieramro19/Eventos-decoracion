@@ -38,6 +38,11 @@ export const routes: Routes = [
     loadComponent: () => import('./features/plans/plan-config/plan-config.component').then(m => m.PlanConfigComponent),
   },
   {
+    path: 'dashboard/events/:id/edit',
+    canActivate: [clientGuard],
+    loadComponent: () => import('./features/client/event-form/client-event-form.component').then(m => m.ClientEventFormComponent),
+  },
+  {
     path: 'dashboard',
     canActivate: [clientGuard],
     loadComponent: () => import('./features/dashboard/dashboard.component').then(m => m.DashboardComponent),
@@ -46,6 +51,15 @@ export const routes: Routes = [
     path: 'admin',
     canActivate: [adminGuard],
     children: [
+      {
+        path: '',
+        pathMatch: 'full',
+        redirectTo: 'requests',
+      },
+      {
+        path: 'requests',
+        loadComponent: () => import('./features/admin/events-list/admin-events-list.component').then(m => m.AdminEventsListComponent),
+      },
       {
         path: 'events',
         loadComponent: () => import('./features/admin/events-list/admin-events-list.component').then(m => m.AdminEventsListComponent),

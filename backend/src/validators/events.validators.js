@@ -1,6 +1,7 @@
 const { body } = require('express-validator');
 
 const allowedCategories = ['wedding', 'birthday', 'corporate', 'baptism', 'communion', 'other'];
+const allowedPlanStatuses = ['pending_review', 'approved', 'rejected'];
 
 const sharedPlanValidators = [
   body('planId')
@@ -77,6 +78,9 @@ exports.createEventoValidators = [
   body('isPublished')
     .optional()
     .isBoolean().withMessage('El estado de publicacion debe ser booleano'),
+  body('status')
+    .optional({ nullable: true, checkFalsy: true })
+    .isIn(allowedPlanStatuses).withMessage('El estado del plan no es valido'),
   body('coverImage')
     .optional({ nullable: true })
     .isLength({ max: 500 }).withMessage('La imagen de portada no puede superar 500 caracteres')
@@ -106,6 +110,9 @@ exports.updateEventoValidators = [
   body('isPublished')
     .optional()
     .isBoolean().withMessage('El estado de publicacion debe ser booleano'),
+  body('status')
+    .optional({ nullable: true, checkFalsy: true })
+    .isIn(allowedPlanStatuses).withMessage('El estado del plan no es valido'),
   body('coverImage')
     .optional({ nullable: true })
     .isLength({ max: 500 }).withMessage('La imagen de portada no puede superar 500 caracteres')

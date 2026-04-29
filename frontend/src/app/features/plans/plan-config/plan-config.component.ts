@@ -49,6 +49,15 @@ import { PLAN_EXTRAS, PLANS, PlanCard, PlanExtra } from '../plans.data';
       </section>
 
       <section class="custom-section">
+        <h2>Nombre de tu solicitud</h2>
+        <p class="block-copy">Pon el nombre con el que quieres identificar este montaje en tu panel y en la revision del admin.</p>
+        <div class="sonic-field">
+          <label for="event-title">Nombre de la solicitud</label>
+          <input id="event-title" [(ngModel)]="eventTitle" placeholder="Ej. Boda Ana y David">
+        </div>
+      </section>
+
+      <section class="custom-section">
         <h2>Extra personalizado</h2>
         <p class="block-copy">Si necesitas algo diferente a la lista, describelo aqui para incluirlo en tu propuesta.</p>
         <div class="sonic-field">
@@ -241,6 +250,7 @@ export class PlanConfigComponent implements OnInit {
   selectedExtraIds = signal<string[]>([]);
   saving = signal(false);
   feedback = signal('');
+  eventTitle = '';
   customExtraNote = '';
 
   constructor(
@@ -258,8 +268,11 @@ export class PlanConfigComponent implements OnInit {
 
     const draft = this.planDraftService.get();
     if (draft && draft.planId === id) {
+      this.eventTitle = draft.eventTitle;
       this.selectedExtraIds.set(draft.selectedExtras.map((extra) => extra.id));
       this.customExtraNote = draft.customExtraNote;
+    } else if (selected) {
+      this.eventTitle = selected.name;
     }
   }
 
@@ -300,6 +313,7 @@ export class PlanConfigComponent implements OnInit {
     }
 
     const draft = {
+      eventTitle: this.eventTitle.trim() || selectedPlan.name,
       planId: selectedPlan.id,
       planName: selectedPlan.name,
       planSummary: selectedPlan.summary,

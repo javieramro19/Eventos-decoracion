@@ -1,9 +1,10 @@
-import { Component, OnInit, signal } from '@angular/core';
+import { Component, OnDestroy, OnInit, computed, signal } from '@angular/core';
 import { CommonModule } from '@angular/common';
-import { RouterModule } from '@angular/router';
+import { HttpErrorResponse } from '@angular/common/http';
+import { Router, RouterModule } from '@angular/router';
 import { MatButtonModule } from '@angular/material/button';
 import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
-import { Evento } from '../../../core/models/event.model';
+import { Evento, PlanStatus } from '../../../core/models/event.model';
 import { EventoService } from '../../../core/services/events.service';
 
 @Component({
@@ -15,72 +16,104 @@ import { EventoService } from '../../../core/services/events.service';
       <section class="hero-card">
         <div>
           <span class="eyebrow">Panel Admin</span>
-          <h1>Gestiona qué eventos viven en privado y cuáles salen a tu escaparate público.</h1>
-          <p>Publica, despublica, edita y ordena toda tu cartera de montajes desde un dashboard claro y rápido.</p>
+          <h1>{{ isRequestsView() ? 'Solicitudes de clientes listas para revisar.' : 'Agenda de planes confirmados.' }}</h1>
+          <p>{{ isRequestsView() ? 'Acepta la solicitud y se movera automaticamente a la agenda.' : 'Aqui solo gestionas las entradas ya aceptadas.' }}</p>
         </div>
 
         <div class="hero-actions">
-          <a mat-raised-button color="primary" routerLink="/admin/events/new">Crear evento</a>
-          <a mat-stroked-button routerLink="/eventos">Ver galería pública</a>
+          <a *ngIf="isRequestsView()" mat-raised-button color="primary" routerLink="/admin/events">Ir a agenda</a>
+          <a *ngIf="!isRequestsView()" mat-raised-button color="primary" routerLink="/admin/events/new">Crear evento</a>
+          <a mat-stroked-button routerLink="/eventos">Ver galeria publica</a>
         </div>
       </section>
 
       <div *ngIf="loading()" class="state-card">
         <mat-spinner diameter="42"></mat-spinner>
-        <p>Cargando eventos del panel...</p>
+        <p>Cargando panel...</p>
       </div>
 
-      <section *ngIf="!loading() && items().length === 0" class="state-card">
+      <section *ngIf="!loading() && isRequestsView() && pendingRequests().length === 0" class="state-card">
         <div class="ui-mark">ES</div>
-        <h2>Aún no tienes eventos</h2>
-        <p>Crea el primero y decide después si se queda como borrador o si pasa a la galería pública.</p>
+        <h2>No hay solicitudes pendientes</h2>
+        <p>Ahora mismo no tienes planes de clientes esperando confirmacion.</p>
+        <a mat-raised-button color="primary" routerLink="/admin/events">Ir a eventos</a>
+      </section>
+
+      <section *ngIf="!loading() && isRequestsView() && pendingRequests().length > 0" class="requests-panel">
+        <div class="requests-head">
+          <div>
+            <span class="eyebrow">Solicitudes</span>
+            <h2>{{ pendingRequests().length }} pendientes</h2>
+          </div>
+          <a mat-stroked-button routerLink="/admin/events">Ver agenda</a>
+        </div>
+
+        <div class="requests-grid">
+          <article *ngFor="let item of pendingRequests()" class="request-card">
+            <div class="request-copy">
+              <span class="owner-chip" *ngIf="item.ownerEmail">{{ item.ownerEmail }}</span>
+              <h3>{{ item.title }}</h3>
+              <p>{{ item.planName || 'Plan solicitado' }}</p>
+              <p>{{ formatEventDate(item.eventDate) }}</p>
+              <p *ngIf="item.selectedExtras?.length">Extras: {{ extrasLabel(item) }}</p>
+              <p *ngIf="item.customExtraNote">{{ item.customExtraNote }}</p>
+            </div>
+
+            <div class="request-actions">
+              <button mat-raised-button color="primary" type="button" [disabled]="busyIds().includes(item.id)" (click)="acceptRequest(item)">Aceptar solicitud</button>
+              <button mat-stroked-button class="danger-button" type="button" [disabled]="busyIds().includes(item.id)" (click)="rejectRequest(item)">Rechazar solicitud</button>
+            </div>
+          </article>
+        </div>
+      </section>
+
+      <section *ngIf="!loading() && !isRequestsView() && items().length === 0" class="state-card">
+        <div class="ui-mark">ES</div>
+        <h2>Aun no tienes eventos</h2>
+        <p>Crea el primero y decide despues si se queda como borrador o si pasa a la galeria publica.</p>
         <a mat-raised-button color="primary" routerLink="/admin/events/new">Crear primer evento</a>
       </section>
 
-      <section *ngIf="!loading() && items().length > 0" class="list-card">
-        <div class="list-head">
+      <section *ngIf="!loading() && !isRequestsView() && items().length > 0" class="events-panel">
+        <div class="events-head">
           <div>
-            <span class="eyebrow">Mis eventos</span>
-            <h2>{{ items().length }} proyectos en tu panel</h2>
+            <span class="eyebrow">Agenda</span>
+            <h2>{{ approvedItems().length }} entradas aceptadas</h2>
           </div>
-          <p>Los publicados se muestran en la ruta publica /eventos; los borradores siguen siendo privados.</p>
+          <p>Desde aqui puedes abrir y gestionar solo las solicitudes que ya han sido aceptadas.</p>
         </div>
 
-        <div class="table-wrap">
-          <article *ngFor="let item of items()" class="event-row">
-            <div class="event-main">
+        <div class="events-grid">
+          <article *ngFor="let item of approvedItems()" class="event-card">
+            <div class="event-top">
               <div class="thumb" [style.background-image]="getCoverStyle(item)"></div>
-              <div>
+              <div class="event-copy">
                 <h3>{{ item.title }}</h3>
                 <p>{{ item.slug }}</p>
                 <span class="owner-chip" *ngIf="item.ownerEmail">{{ item.ownerEmail }}</span>
               </div>
             </div>
 
-            <div class="meta-cell">
-              <span>Fecha</span>
-              <strong>{{ formatEventDate(item.eventDate) }}</strong>
+            <div class="meta-grid">
+              <div class="meta-chip">
+                <span>Fecha</span>
+                <strong>{{ formatEventDate(item.eventDate) }}</strong>
+              </div>
+              <div class="meta-chip">
+                <span>Publico</span>
+                <strong class="status-badge" [class.status-badge--published]="item.isPublished">
+                  {{ item.isPublished ? 'Publicado' : 'Privado' }}
+                </strong>
+              </div>
+              <div class="meta-chip">
+                <span>Revision</span>
+                <strong class="status-badge" [ngClass]="'status-plan-' + item.status">
+                  {{ planStatusLabel(item.status) }}
+                </strong>
+              </div>
             </div>
 
-            <div class="meta-cell">
-              <span>Estado</span>
-              <strong class="status-badge" [class.status-badge--published]="item.isPublished">
-                {{ item.isPublished ? 'Publicado' : 'Borrador' }}
-              </strong>
-            </div>
-
-            <label class="toggle" [class.toggle--busy]="busyIds().includes(item.id)">
-              <input
-                type="checkbox"
-                [checked]="item.isPublished"
-                [disabled]="busyIds().includes(item.id)"
-                (change)="togglePublish(item, $any($event.target).checked)"
-              >
-              <span class="toggle-ui"></span>
-              <span>{{ item.isPublished ? 'Despublicar' : 'Publicar' }}</span>
-            </label>
-
-            <div class="actions">
+            <div class="card-actions">
               <a mat-stroked-button [routerLink]="['/admin/events', item.id, 'edit']">Editar</a>
               <button mat-stroked-button class="danger-button" type="button" (click)="delete(item)">Eliminar</button>
             </div>
@@ -98,8 +131,11 @@ import { EventoService } from '../../../core/services/events.service';
         gap: 1rem;
       }
       .hero-card,
-      .list-card,
-      .state-card {
+      .state-card,
+      .requests-panel,
+      .events-panel,
+      .request-card,
+      .event-card {
         border-radius: 32px;
         border: 1px solid var(--border);
         box-shadow: var(--shadow-sm);
@@ -128,13 +164,15 @@ import { EventoService } from '../../../core/services/events.service';
         font-size: clamp(1.8rem, 3vw, 2.4rem);
       }
       .hero-card p,
-      .list-head p,
-      .event-main p,
-      .state-card p {
+      .state-card p,
+      .events-head p,
+      .request-copy p,
+      .event-copy p {
         color: var(--text-soft);
       }
       .hero-actions,
-      .actions {
+      .card-actions,
+      .request-actions {
         display: flex;
         flex-wrap: wrap;
         gap: 0.75rem;
@@ -147,36 +185,45 @@ import { EventoService } from '../../../core/services/events.service';
         text-align: center;
         background: linear-gradient(180deg, #fffdf9 0%, #f7f1ea 100%);
       }
-      .list-card {
-        padding: 1.5rem;
+      .requests-panel,
+      .events-panel {
+        padding: 1.4rem;
         background: rgba(255, 255, 255, 0.84);
       }
-      .list-head {
+      .requests-head,
+      .events-head {
         display: flex;
         justify-content: space-between;
         gap: 1rem;
         align-items: flex-end;
         margin-bottom: 1rem;
       }
-      .table-wrap {
+      .requests-grid,
+      .events-grid {
         display: grid;
-        gap: 0.85rem;
-      }
-      .event-row {
-        display: grid;
-        grid-template-columns: minmax(0, 2.2fr) minmax(120px, 0.8fr) minmax(120px, 0.8fr) minmax(170px, 1fr) auto;
         gap: 1rem;
-        align-items: center;
-        padding: 1rem;
-        border-radius: 24px;
+      }
+      .requests-grid {
+        grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+      }
+      .events-grid {
+        grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+      }
+      .request-card,
+      .event-card {
+        padding: 1.2rem;
         background: linear-gradient(180deg, #ffffff 0%, #faf5ee 100%);
-        border: 1px solid rgba(44, 44, 44, 0.06);
       }
-      .event-main {
-        display: flex;
-        align-items: center;
+      .request-copy,
+      .event-copy {
+        display: grid;
+        gap: 0.35rem;
+      }
+      .event-top {
+        display: grid;
+        grid-template-columns: 88px minmax(0, 1fr);
         gap: 1rem;
-        min-width: 0;
+        align-items: start;
       }
       .thumb {
         width: 88px;
@@ -185,19 +232,11 @@ import { EventoService } from '../../../core/services/events.service';
         background: linear-gradient(135deg, rgba(212, 175, 122, 0.3), rgba(245, 230, 218, 0.9));
         background-size: cover;
         background-position: center;
-        flex-shrink: 0;
-      }
-      .event-main h3 {
-        font-size: 1.35rem;
-      }
-      .event-main p {
-        margin: 0.35rem 0 0;
-        font-size: 0.9rem;
-        overflow-wrap: anywhere;
       }
       .owner-chip {
         display: inline-flex;
-        margin-top: 0.5rem;
+        width: fit-content;
+        margin-top: 0.35rem;
         padding: 0.34rem 0.58rem;
         border-radius: 8px;
         background: rgba(44, 44, 44, 0.06);
@@ -205,15 +244,27 @@ import { EventoService } from '../../../core/services/events.service';
         font-size: 0.82rem;
         font-weight: 800;
       }
-      .meta-cell {
+      .meta-grid {
         display: grid;
-        gap: 0.35rem;
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+        gap: 0.75rem;
+        margin: 1rem 0;
       }
-      .meta-cell span {
+      .meta-chip {
+        padding: 0.9rem;
+        border-radius: 18px;
+        background: rgba(244, 231, 214, 0.52);
+      }
+      .meta-chip span {
+        display: block;
         color: var(--muted);
-        font-size: 0.82rem;
+        font-size: 0.78rem;
         text-transform: uppercase;
         letter-spacing: 0.08em;
+      }
+      .meta-chip strong {
+        display: block;
+        margin-top: 0.35rem;
       }
       .status-badge {
         display: inline-flex;
@@ -224,9 +275,18 @@ import { EventoService } from '../../../core/services/events.service';
         color: #5f5a54;
         font-size: 0.86rem;
       }
-      .status-badge--published {
+      .status-badge--published,
+      .status-plan-approved {
         background: rgba(110, 203, 141, 0.18);
         color: #418b58;
+      }
+      .status-plan-pending_review {
+        background: rgba(212, 175, 122, 0.16);
+        color: var(--accent-strong);
+      }
+      .status-plan-rejected {
+        background: rgba(200, 72, 72, 0.14);
+        color: #b54848;
       }
       .toggle {
         display: inline-flex;
@@ -234,6 +294,7 @@ import { EventoService } from '../../../core/services/events.service';
         gap: 0.7rem;
         color: var(--text);
         font-weight: 700;
+        margin-bottom: 1rem;
       }
       .toggle input {
         position: absolute;
@@ -273,35 +334,50 @@ import { EventoService } from '../../../core/services/events.service';
         border-color: rgba(200, 72, 72, 0.24) !important;
         color: #b54848 !important;
       }
-      @media (max-width: 1040px) {
-        .event-row {
-          grid-template-columns: 1fr;
-          align-items: flex-start;
-        }
-      }
       @media (max-width: 760px) {
         .hero-card,
-        .list-head {
+        .requests-head,
+        .events-head,
+        .event-top,
+        .meta-grid {
           display: grid;
           align-items: flex-start;
+        }
+        .meta-grid {
+          grid-template-columns: 1fr;
         }
       }
     `,
   ],
 })
-export class AdminEventsListComponent implements OnInit {
+export class AdminEventsListComponent implements OnInit, OnDestroy {
   items = signal<Evento[]>([]);
   loading = signal(false);
   busyIds = signal<number[]>([]);
+  pendingRequests = computed(() => this.items().filter((item) => item.status === 'pending_review'));
+  approvedItems = computed(() => this.items().filter((item) => item.status === 'approved'));
+  isRequestsView = signal(false);
+  private pollId: ReturnType<typeof setInterval> | null = null;
 
-  constructor(private eventsService: EventoService) {}
+  constructor(private eventsService: EventoService, private router: Router) {}
 
   ngOnInit(): void {
+    this.isRequestsView.set(this.router.url.includes('/admin/requests'));
     this.loadItems();
+    this.pollId = setInterval(() => this.loadItems(false), 15000);
   }
 
-  loadItems(): void {
-    this.loading.set(true);
+  ngOnDestroy(): void {
+    if (this.pollId) {
+      clearInterval(this.pollId);
+    }
+  }
+
+  loadItems(showLoader = true): void {
+    if (showLoader) {
+      this.loading.set(true);
+    }
+
     this.eventsService.getAllEventsAdmin().subscribe({
       next: (items) => {
         this.items.set(items);
@@ -315,10 +391,40 @@ export class AdminEventsListComponent implements OnInit {
     this.busyIds.update((ids) => [...ids, item.id]);
     this.eventsService.togglePublish(item.id, isPublished).subscribe({
       next: (updated) => {
-        this.items.update((items) => items.map((current) => current.id === updated.id ? updated : current));
+        this.items.update((items) => items.map((current) => current.id === updated.id ? { ...current, ...updated } : current));
         this.busyIds.update((ids) => ids.filter((id) => id !== item.id));
       },
       error: () => this.busyIds.update((ids) => ids.filter((id) => id !== item.id)),
+    });
+  }
+
+  acceptRequest(item: Evento): void {
+    this.busyIds.update((ids) => [...ids, item.id]);
+    this.eventsService.updateAdminEventStatus(item.id, 'approved').subscribe({
+      next: (updated) => {
+        this.items.update((items) => items.map((current) => current.id === updated.id ? { ...current, ...updated } : current));
+        this.busyIds.update((ids) => ids.filter((id) => id !== item.id));
+        this.loadItems(false);
+      },
+      error: (error) => {
+        this.busyIds.update((ids) => ids.filter((id) => id !== item.id));
+        alert(this.requestErrorMessage('aceptar', error));
+      },
+    });
+  }
+
+  rejectRequest(item: Evento): void {
+    this.busyIds.update((ids) => [...ids, item.id]);
+    this.eventsService.updateAdminEventStatus(item.id, 'rejected').subscribe({
+      next: (updated) => {
+        this.items.update((items) => items.map((current) => current.id === updated.id ? { ...current, ...updated } : current));
+        this.busyIds.update((ids) => ids.filter((id) => id !== item.id));
+        this.loadItems(false);
+      },
+      error: (error) => {
+        this.busyIds.update((ids) => ids.filter((id) => id !== item.id));
+        alert(this.requestErrorMessage('rechazar', error));
+      },
     });
   }
 
@@ -347,5 +453,26 @@ export class AdminEventsListComponent implements OnInit {
   getCoverStyle(item: Evento): string {
     const image = item.coverImage || item.images?.[0];
     return image ? `url('${this.eventsService.resolveAssetUrl(image)}')` : '';
+  }
+
+  planStatusLabel(status: PlanStatus): string {
+    const labels: Record<PlanStatus, string> = {
+      pending_review: 'Pendiente',
+      approved: 'Confirmado',
+      rejected: 'Rechazado',
+    };
+
+    return labels[status];
+  }
+
+  extrasLabel(item: Evento): string {
+    return (item.selectedExtras || []).map((extra) => extra.name).join(', ');
+  }
+
+  private requestErrorMessage(action: 'aceptar' | 'rechazar', error?: HttpErrorResponse): string {
+    const detail = typeof error?.error?.error === 'string' ? error.error.error : '';
+    return detail
+      ? `No se pudo ${action} la solicitud: ${detail}`
+      : `No se pudo ${action} la solicitud. Reinicia el backend y vuelve a intentarlo.`;
   }
 }

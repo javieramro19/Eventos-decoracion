@@ -10,13 +10,13 @@
         <a routerLink="/" fragment="planes">Planes</a>
         <a routerLink="/eventos" routerLinkActive="active">Eventos</a>
         <a *ngIf="authService.isClient()" routerLink="/dashboard" routerLinkActive="active">Mi panel</a>
-        <a *ngIf="authService.isAdmin()" routerLink="/admin/events" routerLinkActive="active">Admin</a>
-        <a *ngIf="authService.isAdmin()" routerLink="/admin/contacts" routerLinkActive="active">Solicitudes</a>
+        <a *ngIf="authService.isAdmin()" routerLink="/admin/requests" routerLinkActive="active">Solicitudes</a>
+        <a *ngIf="authService.isAdmin()" routerLink="/admin/events" routerLinkActive="active">Agenda</a>
       </nav>
 
       <div class="user-block">
         <a *ngIf="!authService.isAuthenticated()" class="cta-link" routerLink="/auth/login">Iniciar sesion / Crear cuenta</a>
-        <a *ngIf="authService.isAdmin()" class="cta-link" routerLink="/admin/events/new">Nuevo evento</a>
+        <a *ngIf="authService.isAdmin()" class="cta-link" routerLink="/admin/events/new">Nueva entrada</a>
         <a *ngIf="authService.isClient()" class="cta-link" routerLink="/dashboard">Mi espacio</a>
         <button *ngIf="authService.isAuthenticated()" class="logout" type="button" (click)="authService.logout()">Cerrar sesion</button>
       </div>

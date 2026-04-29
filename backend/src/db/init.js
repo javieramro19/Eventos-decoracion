@@ -292,7 +292,9 @@ const ensureEventsTable = async () => {
       eventDate DATE NULL,
       location VARCHAR(255) NULL,
       category VARCHAR(50) NOT NULL DEFAULT 'other',
+      status VARCHAR(30) NOT NULL DEFAULT 'pending_review',
       isPublished TINYINT(1) NOT NULL DEFAULT 0,
+      approvedAt TIMESTAMP NULL DEFAULT NULL,
       coverImage VARCHAR(500) NULL,
       imagesJson LONGTEXT NULL,
       planId VARCHAR(80) NULL,
@@ -321,7 +323,9 @@ const ensureEventsTable = async () => {
   await ensureColumn('events', 'eventDate', 'DATE NULL');
   await ensureColumn('events', 'location', 'VARCHAR(255) NULL');
   await ensureColumn('events', 'category', "VARCHAR(50) NOT NULL DEFAULT 'other'");
+  await ensureColumn('events', 'status', "VARCHAR(30) NOT NULL DEFAULT 'pending_review'");
   await ensureColumn('events', 'isPublished', 'TINYINT(1) NOT NULL DEFAULT 0');
+  await ensureColumn('events', 'approvedAt', 'TIMESTAMP NULL DEFAULT NULL');
   await ensureColumn('events', 'coverImage', 'VARCHAR(500) NULL');
   await ensureColumn('events', 'imagesJson', 'LONGTEXT NULL');
   await ensureColumn('events', 'planId', 'VARCHAR(80) NULL');
@@ -337,6 +341,7 @@ const ensureEventsTable = async () => {
   await ensureColumn('events', 'updatedAt', 'TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP');
   await ensureUniqueIndex('events', 'idx_events_slug', 'CREATE UNIQUE INDEX idx_events_slug ON events (slug)');
   await ensureIndex('events', 'idx_events_published_date', 'CREATE INDEX idx_events_published_date ON events (isPublished, eventDate)');
+  await ensureIndex('events', 'idx_events_status_created', 'CREATE INDEX idx_events_status_created ON events (status, createdAt)');
 };
 
 const initDatabase = async () => {

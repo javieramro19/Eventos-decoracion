@@ -4,7 +4,7 @@ export interface Evento {
   title: string;
   slug: string;
   description?: string;
-  status?: string;
+  status: PlanStatus;
   category?: string;
   eventDate?: string;
   location?: string;
@@ -38,6 +38,8 @@ export interface GalleryImage {
   createdAt?: string;
   updatedAt?: string;
 }
+
+export type PlanStatus = 'pending_review' | 'approved' | 'rejected';
 
 export type EventSectionType = 'hero' | 'gallery' | 'about' | 'contact';
 
@@ -139,6 +141,7 @@ export interface DashboardStatItem {
 export interface DashboardStats {
   totalEvents: number;
   publishedEvents: number;
+  pendingEventReviews: number;
   pendingContacts: number;
   stalePendingContacts: number;
   recentEvents: Evento[];

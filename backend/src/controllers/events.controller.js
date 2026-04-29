@@ -9,6 +9,7 @@ const logEvent = (action, data) => {
 };
 
 const CONTACT_STATUSES = ['pending', 'contacted', 'converted', 'rejected'];
+const PLAN_STATUSES = ['pending_review', 'approved', 'rejected'];
 const SECTION_TYPES = ['hero', 'gallery', 'about', 'contact'];
 
 const parseJsonArray = (value) => {
@@ -78,6 +79,11 @@ const toBoolean = (value, fallback = false) => {
 
   const normalized = String(value).trim().toLowerCase();
   return ['true', '1', 'yes', 'si', 'on'].includes(normalized);
+};
+
+const normalizePlanStatus = (value, fallback = 'pending_review') => {
+  const normalized = String(value || '').trim().toLowerCase();
+  return PLAN_STATUSES.includes(normalized) ? normalized : fallback;
 };
 
 const sanitizeSelectedExtras = (value) => {
@@ -446,7 +452,9 @@ const normalizeEvent = (row) => {
 
   return {
     ...row,
+    status: normalizePlanStatus(row.status),
     isPublished: Boolean(row.isPublished),
+    approvedAt: row.approvedAt,
     basePrice: row.basePrice !== null ? Number(row.basePrice) : null,
     extrasTotal: row.extrasTotal !== null ? Number(row.extrasTotal) : null,
     totalPrice: row.totalPrice !== null ? Number(row.totalPrice) : null,
@@ -463,6 +471,7 @@ const mapEventPayload = (body) => ({
   eventDate: body.eventDate || null,
   location: body.location?.trim() || null,
   category: body.category || 'other',
+  status: normalizePlanStatus(body.status),
   isPublished: toBoolean(body.isPublished),
   coverImage: body.coverImage?.trim() || null,
   images: sanitizeImages(body.images, body.coverImage?.trim() || null),
@@ -522,6 +531,11 @@ exports.getStatsSummary = async (req, res) => {
 
     const [[publishedRow]] = await pool.query(
       `SELECT COUNT(*) as total FROM events ${admin ? 'WHERE' : `${eventScope} AND`} isPublished = 1`,
+      eventParams
+    );
+
+    const [[pendingReviewRow]] = await pool.query(
+      `SELECT COUNT(*) as total FROM events ${admin ? 'WHERE' : `${eventScope} AND`} status = 'pending_review'`,
       eventParams
     );
 
@@ -586,9 +600,21 @@ exports.getStatsSummary = async (req, res) => {
       });
     }
 
+    if (pendingReviewRow.total > 0) {
+      alerts.push({
+        type: 'pending_event_reviews',
+        severity: admin ? 'high' : 'medium',
+        count: pendingReviewRow.total,
+        message: admin
+          ? `Tienes ${pendingReviewRow.total} plan(es) de clientes esperando aprobacion`
+          : `Tienes ${pendingReviewRow.total} plan(es) pendientes de confirmacion por el admin`,
+      });
+    }
+
     res.json({
       totalEvents: totalRow.total,
       publishedEvents: publishedRow.total,
+      pendingEventReviews: pendingReviewRow.total,
       pendingContacts: pendingContactsRow.total,
       stalePendingContacts: stalePendingRow.total,
       recentEvents: recentEvents.map(normalizeEvent),
@@ -867,13 +893,14 @@ exports.createAdminEvent = async (req, res) => {
   try {
     const payload = mapEventPayload(req.body);
     const slug = await buildUniqueSlug(payload.title);
+    const status = isAdminUser(req.user) ? normalizePlanStatus(payload.status, 'approved') : 'pending_review';
 
     const [result] = await pool.query(
       `INSERT INTO events (
-        userId, title, slug, description, eventDate, location, category, isPublished, coverImage, imagesJson,
+        userId, title, slug, description, eventDate, location, category, status, isPublished, approvedAt, coverImage, imagesJson,
         planId, planName, planSummary, basePrice, extrasTotal, totalPrice, customExtraNote, extrasJson, source
       )
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [
         req.user.id,
         payload.title,
@@ -882,7 +909,9 @@ exports.createAdminEvent = async (req, res) => {
         payload.eventDate,
         payload.location,
         payload.category,
-        payload.isPublished,
+        status,
+        isAdminUser(req.user) ? payload.isPublished : false,
+        status === 'approved' ? new Date() : null,
         payload.coverImage,
         JSON.stringify(payload.images),
         payload.planId,
@@ -934,11 +963,30 @@ exports.updateAdminEvent = async (req, res) => {
     const payload = mapEventPayload(req.body);
     const fields = [];
     const values = [];
+    const admin = isAdminUser(req.user);
+    const decision = normalizePlanStatus(req.query?.decision, '');
+    const reviewState = normalizePlanStatus(req.body?.reviewState, '');
 
     const assign = (field, value) => {
       fields.push(`${field} = ?`);
       values.push(value);
     };
+
+    if (admin && decision) {
+      assign('status', decision);
+      assign('approvedAt', decision === 'approved' ? new Date() : null);
+      if (decision !== 'approved') {
+        assign('isPublished', false);
+      }
+    }
+
+    if (admin && reviewState) {
+      assign('status', reviewState);
+      assign('approvedAt', reviewState === 'approved' ? new Date() : null);
+      if (reviewState !== 'approved') {
+        assign('isPublished', false);
+      }
+    }
 
     if (req.body.title !== undefined) {
       assign('title', payload.title);
@@ -948,7 +996,15 @@ exports.updateAdminEvent = async (req, res) => {
     if (req.body.eventDate !== undefined) assign('eventDate', payload.eventDate);
     if (req.body.location !== undefined) assign('location', payload.location);
     if (req.body.category !== undefined) assign('category', payload.category);
-    if (req.body.isPublished !== undefined) assign('isPublished', payload.isPublished);
+    if (req.body.isPublished !== undefined && admin) assign('isPublished', payload.isPublished);
+    if (req.body.status !== undefined && admin) {
+      const nextStatus = normalizePlanStatus(payload.status, current.status || 'pending_review');
+      assign('status', nextStatus);
+      assign('approvedAt', nextStatus === 'approved' ? new Date() : null);
+      if (nextStatus !== 'approved') {
+        assign('isPublished', false);
+      }
+    }
     if (req.body.coverImage !== undefined) assign('coverImage', payload.coverImage);
     if (req.body.images !== undefined || req.body.coverImage !== undefined) {
       assign('imagesJson', JSON.stringify(payload.images));
@@ -962,6 +1018,12 @@ exports.updateAdminEvent = async (req, res) => {
     if (req.body.customExtraNote !== undefined) assign('customExtraNote', payload.customExtraNote);
     if (req.body.selectedExtras !== undefined) assign('extrasJson', JSON.stringify(payload.selectedExtras));
     if (req.body.source !== undefined) assign('source', payload.source);
+
+    if (!admin) {
+      assign('status', 'pending_review');
+      assign('approvedAt', null);
+      assign('isPublished', false);
+    }
 
     if (fields.length === 0) {
       return res.status(400).json({ error: 'No hay campos validos para actualizar' });
@@ -1216,13 +1278,17 @@ exports.updateAdminEventSection = async (req, res) => {
 
 exports.publishAdminEvent = async (req, res) => {
   try {
+    if (!isAdminUser(req.user)) {
+      return res.status(403).json({ error: 'Solo el administrador puede publicar eventos' });
+    }
+
     const current = await findOwnedEvent(req.params.id, req.user);
     if (!current) {
       return res.status(404).json({ error: 'Evento no encontrado' });
     }
 
     await pool.query(
-      `UPDATE events SET isPublished = 1 WHERE id = ?${isAdminUser(req.user) ? '' : ' AND userId = ?'}`,
+      `UPDATE events SET isPublished = 1, status = 'approved', approvedAt = COALESCE(approvedAt, CURRENT_TIMESTAMP) WHERE id = ?${isAdminUser(req.user) ? '' : ' AND userId = ?'}`,
       isAdminUser(req.user) ? [req.params.id] : [req.params.id, req.user.id]
     );
 
@@ -1236,6 +1302,10 @@ exports.publishAdminEvent = async (req, res) => {
 
 exports.unpublishAdminEvent = async (req, res) => {
   try {
+    if (!isAdminUser(req.user)) {
+      return res.status(403).json({ error: 'Solo el administrador puede despublicar eventos' });
+    }
+
     const current = await findOwnedEvent(req.params.id, req.user);
     if (!current) {
       return res.status(404).json({ error: 'Evento no encontrado' });
@@ -1251,6 +1321,54 @@ exports.unpublishAdminEvent = async (req, res) => {
   } catch (error) {
     console.error('Error al despublicar el evento:', error.message || error);
     res.status(500).json({ error: 'Error al despublicar el evento' });
+  }
+};
+
+exports.approveAdminEvent = async (req, res) => {
+  try {
+    if (!isAdminUser(req.user)) {
+      return res.status(403).json({ error: 'Solo el administrador puede confirmar planes' });
+    }
+
+    const current = await findOwnedEvent(req.params.id, req.user);
+    if (!current) {
+      return res.status(404).json({ error: 'Evento no encontrado' });
+    }
+
+    await pool.query(
+      "UPDATE events SET status = 'approved', approvedAt = CURRENT_TIMESTAMP WHERE id = ?",
+      [req.params.id]
+    );
+
+    const updated = await findOwnedEvent(req.params.id, req.user);
+    res.json(normalizeEvent(updated));
+  } catch (error) {
+    console.error('Error al aprobar el plan:', error.message || error);
+    res.status(500).json({ error: 'Error al aprobar el plan' });
+  }
+};
+
+exports.rejectAdminEvent = async (req, res) => {
+  try {
+    if (!isAdminUser(req.user)) {
+      return res.status(403).json({ error: 'Solo el administrador puede rechazar planes' });
+    }
+
+    const current = await findOwnedEvent(req.params.id, req.user);
+    if (!current) {
+      return res.status(404).json({ error: 'Evento no encontrado' });
+    }
+
+    await pool.query(
+      "UPDATE events SET status = 'rejected', approvedAt = NULL, isPublished = 0 WHERE id = ?",
+      [req.params.id]
+    );
+
+    const updated = await findOwnedEvent(req.params.id, req.user);
+    res.json(normalizeEvent(updated));
+  } catch (error) {
+    console.error('Error al rechazar el plan:', error.message || error);
+    res.status(500).json({ error: 'Error al rechazar el plan' });
   }
 };
 
@@ -1270,6 +1388,36 @@ exports.removeAdminEvent = async (req, res) => {
   } catch (error) {
     console.error('Error al eliminar el evento:', error.message || error);
     res.status(500).json({ error: 'Error al eliminar el evento' });
+  }
+};
+
+exports.updateAdminEventStatus = async (req, res) => {
+  try {
+    if (!isAdminUser(req.user)) {
+      return res.status(403).json({ error: 'Solo el administrador puede confirmar planes' });
+    }
+
+    const current = await findOwnedEvent(req.params.id, req.user);
+    if (!current) {
+      return res.status(404).json({ error: 'Evento no encontrado' });
+    }
+
+    const status = normalizePlanStatus(req.body?.status);
+    if (!PLAN_STATUSES.includes(status)) {
+      return res.status(400).json({ error: 'Estado de plan no valido' });
+    }
+
+    const isApproved = status === 'approved';
+    await pool.query(
+      'UPDATE events SET status = ?, approvedAt = ?, isPublished = ? WHERE id = ?',
+      [status, isApproved ? new Date() : null, isApproved ? current.isPublished : false, req.params.id]
+    );
+
+    const updated = await findOwnedEvent(req.params.id, req.user);
+    res.json(normalizeEvent(updated));
+  } catch (error) {
+    console.error('Error al actualizar el estado del plan:', error.message || error);
+    res.status(500).json({ error: 'Error al actualizar el estado del plan' });
   }
 };
 

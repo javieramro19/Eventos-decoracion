@@ -151,10 +151,10 @@
 
   <section class="contact-section" id="contacto">
     <div class="container">
-      <div class="section-heading section-heading-light">
-        <p class="eyebrow">Informacion</p>
-        <h2>Una presentacion mas ordenada para que el siguiente paso sea sencillo.</h2>
-        <p>Si quieres cambiar cualquier texto de esta landing, ahora puedes hacerlo directamente desde este archivo HTML.</p>
+      <div class="section-heading section-heading-light contact-heading">
+        <p class="eyebrow">Contacto</p>
+        <h2>Hablamos?</h2>
+        <p>Estamos aqui para hacer tu celebracion inolvidable.</p>
       </div>
 
       <div class="contact-grid">
@@ -164,9 +164,26 @@
         </article>
       </div>
 
-      <div class="footer-actions">
-        <a mat-raised-button color="primary" [routerLink]="authRoute">{{ authLabel }}</a>
-        <a mat-stroked-button class="footer-outline" routerLink="/" fragment="planes">Comparar planes</a>
+      <div class="contact-actions">
+        <a
+          mat-raised-button
+          color="primary"
+          class="whatsapp-button"
+          href="https://wa.me/34647808298"
+          target="_blank"
+          rel="noreferrer"
+        >
+          Escribenos por WhatsApp
+        </a>
+      </div>
+
+      <div class="contact-footer">
+        <p class="copyright">© 2025 EventoSonic · Todos los derechos reservados</p>
+
+        <div class="social-links">
+          <a href="https://www.instagram.com" target="_blank" rel="noreferrer">Instagram</a>
+          <a href="https://www.tiktok.com" target="_blank" rel="noreferrer">TikTok</a>
+        </div>
       </div>
     </div>
   </section>

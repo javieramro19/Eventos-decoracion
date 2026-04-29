@@ -96,11 +96,13 @@ import { EventoService } from '../../../core/services/events.service';
                 <div class="sonic-field">
                   <label for="contact-name">Nombre</label>
                   <input id="contact-name" formControlName="name" placeholder="Tu nombre">
+                  <span class="field-error" *ngIf="contactFieldError('name')">{{ contactFieldError('name') }}</span>
                 </div>
 
                 <div class="sonic-field">
                   <label for="contact-email">Email</label>
                   <input id="contact-email" formControlName="email" type="email" placeholder="cliente@evento.com">
+                  <span class="field-error" *ngIf="contactFieldError('email')">{{ contactFieldError('email') }}</span>
                 </div>
 
                 <div class="sonic-field">
@@ -112,6 +114,7 @@ import { EventoService } from '../../../core/services/events.service';
               <div class="sonic-field">
                 <label for="contact-message">Mensaje</label>
                 <textarea id="contact-message" formControlName="message" rows="5" placeholder="Cuentanos que necesitas, fecha estimada y estilo del evento."></textarea>
+                <span class="field-error" *ngIf="contactFieldError('message')">{{ contactFieldError('message') }}</span>
               </div>
 
               <p *ngIf="contactError()" class="error-text">{{ contactError() }}</p>
@@ -301,6 +304,13 @@ import { EventoService } from '../../../core/services/events.service';
         color: #b54848;
         font-weight: 700;
       }
+      .field-error {
+        display: block;
+        margin-top: 0.35rem;
+        color: #b54848;
+        font-size: 0.84rem;
+        font-weight: 700;
+      }
       .state-card {
         min-height: 260px;
         display: grid;
@@ -417,6 +427,7 @@ export class PublicEventDetailComponent implements OnInit {
   submitContact(): void {
     if (this.contactForm.invalid || !this.item()) {
       this.contactForm.markAllAsTouched();
+      this.contactError.set('Completa correctamente los campos obligatorios antes de enviar la solicitud.');
       return;
     }
 
@@ -430,10 +441,33 @@ export class PublicEventDetailComponent implements OnInit {
         this.contactForm.reset({ name: '', email: '', phone: '', message: '' });
       },
       error: (error) => {
-        this.contactError.set(error?.error?.error || 'No se pudo enviar la solicitud.');
+        this.contactError.set(this.readApiError(error, 'No se pudo enviar la solicitud.'));
       },
       complete: () => this.sendingContact.set(false),
     });
+  }
+
+  contactFieldError(fieldName: 'name' | 'email' | 'message'): string {
+    const control = this.contactForm.get(fieldName);
+    if (!control || !(control.touched || control.dirty) || !control.errors) {
+      return '';
+    }
+
+    if (control.hasError('required')) {
+      return 'Este campo es obligatorio.';
+    }
+
+    if (fieldName === 'email' && control.hasError('email')) {
+      return 'Introduce un email valido.';
+    }
+
+    if (control.hasError('minlength')) {
+      return fieldName === 'message'
+        ? 'El mensaje debe tener al menos 10 caracteres.'
+        : 'Introduce al menos 2 caracteres.';
+    }
+
+    return '';
   }
 
   galleryImages(event: Evento): string[] {
@@ -475,5 +509,20 @@ export class PublicEventDetailComponent implements OnInit {
       month: 'long',
       year: 'numeric',
     }).format(new Date(value));
+  }
+
+  private readApiError(error: any, fallback: string): string {
+    if (typeof error?.error?.error === 'string' && error.error.error.trim()) {
+      return error.error.error;
+    }
+
+    if (Array.isArray(error?.error?.errors) && error.error.errors.length > 0) {
+      return error.error.errors
+        .map((item: { msg?: string }) => item.msg)
+        .filter(Boolean)
+        .join(' ');
+    }
+
+    return fallback;
   }
 }

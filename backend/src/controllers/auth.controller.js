@@ -57,21 +57,25 @@ exports.register = async (req, res) => {
 exports.login = async (req, res) => {
   const errors = validationResult(req);
   if (!errors.isEmpty()) {
+    console.log('[AUTH] Login - Errores de validación:', errors.array());
     return res.status(422).json({ errors: errors.array() });
   }
 
   try {
     const { email, password } = req.body;
     logAuth('login request', { email });
+    console.log('[AUTH] Login attempt from:', req.get('origin'), '| IP:', req.ip);
 
     const [rows] = await pool.query('SELECT * FROM users WHERE email = ?', [email]);
     if (rows.length === 0) {
+      console.log('[AUTH] Login fallido - Usuario no encontrado:', email);
       return res.status(401).json({ error: 'Credenciales incorrectas' });
     }
 
     const user = rows[0];
     const validPassword = await bcrypt.compare(password, user.password);
     if (!validPassword) {
+      console.log('[AUTH] Login fallido - Contraseña incorrecta:', email);
       return res.status(401).json({ error: 'Credenciales incorrectas' });
     }
 
@@ -82,13 +86,14 @@ exports.login = async (req, res) => {
       { expiresIn: process.env.JWT_EXPIRES_IN || '7d' }
     );
 
+    console.log('[AUTH] ✓ Login exitoso:', { userId: user.id, email: user.email, role });
     res.json({
       message: 'Login correcto',
       token,
       user: { id: user.id, name: user.name, email: user.email, role },
     });
   } catch (error) {
-    console.error('Error en login:', error.message || error);
+    console.error('[AUTH] ✗ Error en login:', error.message || error);
     res.status(500).json({ error: 'Error al iniciar sesión' });
   }
 };

@@ -12,36 +12,72 @@ const app = express();
 
 app.set('trust proxy', 1);
 
+const defaultDevOrigins = [
+  'http://localhost:4200',
+  'http://127.0.0.1:4200',
+  'http://[::1]:4200',
+  'http://localhost:4201',
+  'http://127.0.0.1:4201',
+  'http://[::1]:4201',
+  'http://localhost:4300',
+  'http://127.0.0.1:4300',
+  'http://[::1]:4300',
+];
+
 const configuredOrigins = String(
-  process.env.FRONTEND_URLS || process.env.FRONTEND_URL || 'http://localhost:4200,http://127.0.0.1:4200'
+  process.env.FRONTEND_URLS || process.env.FRONTEND_URL || defaultDevOrigins.join(',')
 )
   .split(',')
   .map((item) => item.trim())
   .filter(Boolean);
 
+const isDevLoopbackOrigin = (origin) =>
+  /^http:\/\/(localhost|127\.0\.0\.1|\[::1\])(?::\d+)?$/i.test(origin);
+
 const corsOptions = {
   origin(origin, callback) {
+    console.log('[CORS] ================================');
+    console.log('[CORS] Origen recibido:', origin);
+    console.log('[CORS] Orígenes configurados:', configuredOrigins);
+    
     if (!origin) {
+      console.log('[CORS] Sin origen (aceptado)');
       callback(null, true);
       return;
     }
 
     if (configuredOrigins.includes(origin)) {
+      console.log('[CORS] ✓ Origen en lista de permitidos (aceptado)');
       callback(null, true);
       return;
     }
 
+    // Permitir 127.0.0.1 y localhost en cualquier puerto para desarrollo
+    if (isDevLoopbackOrigin(origin)) {
+      console.log('[CORS] ✓ Origen en desarrollo (aceptado)');
+      callback(null, true);
+      return;
+    }
+
+    console.log('[CORS] ✗ ORIGEN RECHAZADO:', origin);
+    console.log('[CORS] ================================');
     callback(new Error('Origen no permitido por CORS'));
   },
+  credentials: true,
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS', 'PATCH'],
+  allowedHeaders: ['Content-Type', 'Authorization'],
 };
 
-app.use(helmet());
 app.use(cors(corsOptions));
+app.options(/.*/, cors(corsOptions));
+// Helmet deshabilitado temporalmente para debug de CORS
+// app.use(helmet());
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 app.use('/uploads', express.static(path.join(__dirname, '..', 'uploads')));
 app.use('/api/events', sanitizeRequestInput);
 app.use('/api/admin/events', sanitizeRequestInput);
+app.use('/api/admin/requests', sanitizeRequestInput);
 app.use('/api/public', publicRateLimit, sanitizeRequestInput);
 
 const shouldLogRequests = String(process.env.LOG_REQUESTS || '').toLowerCase() === 'true';
@@ -84,6 +120,7 @@ if (shouldLogRequests) {
 app.use('/api/auth', require('./routes/auth.routes'));
 app.use('/api/events', require('./routes/events.routes'));
 app.use('/api/admin/events', require('./routes/admin-events.routes'));
+app.use('/api/admin/requests', require('./routes/admin-requests.routes'));
 app.use('/api/public/events', require('./routes/public-events.routes'));
 
 app.get('/api/health', async (req, res) => {
@@ -102,14 +139,18 @@ app.get('/api/health', async (req, res) => {
   }
 });
 
-app.use((error, _req, res, next) => {
+app.use((error, req, res, next) => {
   if (!error) {
     next();
     return;
   }
 
   if (error.message === 'Origen no permitido por CORS') {
-    res.status(403).json({ error: error.message });
+    console.log('[ERROR 403] CORS bloqueado');
+    console.log('[ERROR 403] Origen:', req.get('origin'));
+    console.log('[ERROR 403] URL:', req.originalUrl);
+    console.log('[ERROR 403] Método:', req.method);
+    res.status(403).json({ error: error.message, origin: req.get('origin') });
     return;
   }
 

@@ -381,10 +381,10 @@ li::before {
 
 .contact-section {
   background:
-    radial-gradient(circle at top, rgba(212, 175, 122, 0.12), transparent 35%),
-    linear-gradient(180deg, #2c2c2c 0%, #1d1d1d 100%);
+    radial-gradient(circle at 50% 0%, rgba(212, 175, 122, 0.14), transparent 28%),
+    linear-gradient(180deg, #2f2d2b 0%, #1f1f1f 100%);
   color: #fef8f2;
-  padding: 4.5rem 0 2rem;
+  padding: 5.2rem 0 2.5rem;
   border-radius: var(--radius-lg);
 }
 
@@ -393,30 +393,80 @@ li::before {
   color: rgba(255, 248, 243, 0.8);
 }
 
+.contact-heading {
+  margin-bottom: 3rem;
+}
+
+.contact-heading h2 {
+  font-size: clamp(3rem, 7vw, 4.8rem);
+}
+
 .contact-grid {
   grid-template-columns: repeat(3, minmax(0, 1fr));
+  margin-bottom: 2rem;
 }
 
 .contact-card {
-  padding: 1.5rem;
-  background: rgba(255, 255, 255, 0.06);
+  padding: 1.6rem 1.55rem;
+  background: rgba(255, 255, 255, 0.055);
   color: #fffaf6;
+  border: 1px solid rgba(255, 255, 255, 0.04);
+  border-radius: 26px;
+  box-shadow: 0 24px 44px rgba(0, 0, 0, 0.16);
+}
+
+.contact-card h3 {
+  font-size: clamp(1.8rem, 3vw, 2.3rem);
 }
 
 .contact-card p {
   color: rgba(255, 248, 243, 0.82);
+  margin-top: 0.35rem;
+  font-size: 1.05rem;
 }
 
-.footer-actions {
+.contact-actions {
+  display: flex;
+  justify-content: flex-start;
+  margin-top: 0.8rem;
+}
+
+.whatsapp-button {
+  min-height: 3.6rem;
+  padding-inline: 1.7rem !important;
+  border-radius: 999px !important;
+  background: linear-gradient(135deg, #29c85f, #1ea84d) !important;
+  color: #f8fff9 !important;
+  box-shadow: 0 18px 32px rgba(41, 200, 95, 0.28);
+}
+
+.contact-footer {
+  margin-top: 2.2rem;
+  display: flex;
   justify-content: space-between;
   align-items: center;
-  margin-top: 2rem;
+  gap: 1rem;
 }
 
-.footer-outline {
-  color: #fffaf6;
-  border-color: rgba(255, 248, 243, 0.42) !important;
-  background: rgba(255, 255, 255, 0.08);
+.copyright {
+  color: rgba(255, 238, 225, 0.85);
+  margin: 0;
+}
+
+.social-links {
+  display: flex;
+  align-items: center;
+  gap: 1.35rem;
+}
+
+.social-links a {
+  color: rgba(255, 248, 243, 0.86);
+  text-decoration: none;
+  font-weight: 700;
+}
+
+.social-links a:hover {
+  color: #ffffff;
 }
 
 @media (max-width: 1080px) {
@@ -440,7 +490,12 @@ li::before {
     grid-template-columns: 1fr;
   }
 
-  .footer-actions {
+  .contact-footer {
+    flex-direction: column;
     align-items: stretch;
+  }
+
+  .social-links {
+    justify-content: flex-start;
   }
 }

@@ -1,6 +1,7 @@
 import { Injectable } from '@angular/core';
 import { HttpClient, HttpParams } from '@angular/common/http';
 import { Observable } from 'rxjs';
+import { catchError } from 'rxjs/operators';
 import { environment } from '../../../environments/environment';
 import {
   Evento,
@@ -14,12 +15,14 @@ import {
   EventContact,
   CreateEventContactDto,
   ContactStatus,
+  PlanStatus,
   SectionReorderItem,
 } from '../models/event.model';
 
 @Injectable({ providedIn: 'root' })
 export class EventoService {
   private adminApiUrl = `${environment.apiUrl}/admin/events`;
+  private adminRequestsApiUrl = `${environment.apiUrl}/admin/requests`;
   private clientApiUrl = `${environment.apiUrl}/events`;
   private publicApiUrl = `${environment.apiUrl}/public/events`;
   private assetsBaseUrl = environment.apiUrl.replace(/\/api$/, '');
@@ -38,6 +41,14 @@ export class EventoService {
     return this.http.get<Evento>(`${this.adminApiUrl}/${id}`);
   }
 
+  getClientEvents(): Observable<Evento[]> {
+    return this.http.get<Evento[]>(this.clientApiUrl);
+  }
+
+  getClientEventById(id: number): Observable<Evento> {
+    return this.http.get<Evento>(`${this.clientApiUrl}/${id}`);
+  }
+
   createAdminEvent(data: CreateEventoDto): Observable<Evento> {
     return this.http.post<Evento>(this.adminApiUrl, data);
   }
@@ -50,8 +61,16 @@ export class EventoService {
     return this.http.put<Evento>(`${this.adminApiUrl}/${id}`, data);
   }
 
+  updateClientEvent(id: number, data: UpdateEventoDto): Observable<Evento> {
+    return this.http.put<Evento>(`${this.clientApiUrl}/${id}`, data);
+  }
+
   deleteAdminEvent(id: number): Observable<{ message: string }> {
     return this.http.delete<{ message: string }>(`${this.adminApiUrl}/${id}`);
+  }
+
+  deleteClientEvent(id: number): Observable<{ message: string }> {
+    return this.http.delete<{ message: string }>(`${this.clientApiUrl}/${id}`);
   }
 
   getDashboardStats(): Observable<DashboardStats> {
@@ -77,6 +96,36 @@ export class EventoService {
   togglePublish(id: number, isPublished: boolean): Observable<Evento> {
     const action = isPublished ? 'publish' : 'unpublish';
     return this.http.put<Evento>(`${this.adminApiUrl}/${id}/${action}`, {});
+  }
+
+  updateAdminEventStatus(id: number, status: PlanStatus): Observable<Evento> {
+    const action = status === 'approved' ? 'approve' : 'reject';
+    const primaryRequest = this.http.put<Evento>(`${this.adminApiUrl}/${id}/${action}`, {});
+    const fallbackRequest = this.http.put<Evento>(`${this.adminRequestsApiUrl}/${id}/${action}`, {});
+
+    if (status === 'approved') {
+      return primaryRequest.pipe(
+        catchError(() =>
+          fallbackRequest.pipe(
+            catchError(() => this.togglePublish(id, true))
+          )
+        )
+      );
+    }
+
+    return primaryRequest.pipe(
+      catchError(() =>
+        fallbackRequest.pipe(
+          catchError(() =>
+            this.http.put<Evento>(`${this.adminApiUrl}/${id}`, {
+              status: 'rejected',
+              reviewState: 'rejected',
+              isPublished: false,
+            })
+          )
+        )
+      )
+    );
   }
 
   getAdminContacts(): Observable<EventContact[]> {

@@ -22,6 +22,9 @@ import { EventoService } from '../../../core/services/events.service';
 
       <section class="form-card">
         <form [formGroup]="form" (ngSubmit)="onSubmit()">
+          <p *ngIf="saveMessage()" class="feedback-note feedback-note--success">{{ saveMessage() }}</p>
+          <p *ngIf="saveError()" class="feedback-note feedback-note--error">{{ saveError() }}</p>
+
           <div class="grid-two">
             <div class="sonic-field">
               <label for="title">Titulo del evento</label>
@@ -60,6 +63,15 @@ import { EventoService } from '../../../core/services/events.service';
               <label for="planName">Plan contratado</label>
               <input id="planName" formControlName="planName" placeholder="Ej. Signature Garden">
             </div>
+
+            <div class="sonic-field">
+              <label for="status">Estado del plan</label>
+              <select id="status" formControlName="status">
+                <option value="pending_review">Pendiente de revision</option>
+                <option value="approved">Confirmado</option>
+                <option value="rejected">Rechazado</option>
+              </select>
+            </div>
           </div>
 
           <div class="sonic-field">
@@ -83,7 +95,7 @@ import { EventoService } from '../../../core/services/events.service';
             <input type="checkbox" formControlName="isPublished">
             <div>
               <strong>Publicar evento</strong>
-              <span>Si esta activo, aparecera en la ruta publica /eventos.</span>
+              <span>Solo conviene activarlo cuando el plan ya este confirmado.</span>
             </div>
           </label>
 
@@ -129,6 +141,7 @@ import { EventoService } from '../../../core/services/events.service';
         >
           <article *ngFor="let image of gallery(); trackBy: trackByImageId" cdkDrag class="gallery-item" [class.gallery-item--inactive]="!image.isActive">
             <div class="gallery-item__media" [style.background-image]="getImageStyle(image.imageUrl)">
+              <img [src]="resolveImageUrl(image.imageUrl)" [alt]="image.caption || 'Imagen del evento'">
               <button type="button" cdkDragHandle class="drag-handle" aria-label="Reordenar imagen">::</button>
               <span class="status-chip" [class.status-chip--inactive]="!image.isActive">
                 {{ image.isActive ? 'Activa' : 'Oculta' }}
@@ -153,98 +166,6 @@ import { EventoService } from '../../../core/services/events.service';
                   placeholder="Describe la escena, los tonos o el montaje"
                   (blur)="updateCaption(image, $any($event.target).value)"
                 >
-              </label>
-            </div>
-          </article>
-        </div>
-      </section>
-
-      <section class="gallery-card" *ngIf="isEditing">
-        <div class="gallery-head">
-          <div>
-            <span class="eyebrow">Secciones publicas</span>
-            <h2>Bloques configurables</h2>
-            <p>Activa, desactiva y reordena la narrativa publica del evento. La vista publica solo mostrara las secciones activas.</p>
-          </div>
-        </div>
-
-        <p *ngIf="sectionsMessage()" class="gallery-message">{{ sectionsMessage() }}</p>
-
-        <div *ngIf="sections().length === 0" class="gallery-empty">
-          <div class="ui-mark">ES</div>
-          <p>No hay secciones cargadas todavia. Recarga el evento para inicializar la estructura publica.</p>
-        </div>
-
-        <div
-          *ngIf="sections().length > 0"
-          cdkDropList
-          class="gallery-grid"
-          (cdkDropListDropped)="onSectionsDrop($event)"
-        >
-          <article *ngFor="let section of sections(); trackBy: trackBySectionId" cdkDrag class="gallery-item" [class.gallery-item--inactive]="!section.isActive">
-            <div class="section-summary">
-              <button type="button" cdkDragHandle class="drag-handle drag-handle--inline" aria-label="Reordenar seccion">::</button>
-              <span class="status-chip" [class.status-chip--inactive]="!section.isActive">
-                {{ section.isActive ? 'Activa' : 'Oculta' }}
-              </span>
-              <strong>{{ sectionLabel(section.type) }}</strong>
-              <p>{{ sectionDescription(section.type) }}</p>
-            </div>
-
-            <div class="gallery-item__body">
-              <div class="gallery-item__controls">
-                <label class="switch">
-                  <input type="checkbox" [checked]="section.isActive" (change)="toggleSection(section, $any($event.target).checked)" [disabled]="busySectionIds().includes(section.id)">
-                  <span class="switch-ui"></span>
-                  <span>{{ section.isActive ? 'Visible' : 'Oculta' }}</span>
-                </label>
-              </div>
-
-              <div class="grid-two grid-two--tight">
-                <label class="sonic-field" *ngIf="showSectionField(section.type, 'eyebrow')">
-                  <span>Eyebrow</span>
-                  <input [value]="section.content.eyebrow || ''" (blur)="updateSectionContent(section, 'eyebrow', $any($event.target).value)">
-                </label>
-
-                <label class="sonic-field" *ngIf="showSectionField(section.type, 'title')">
-                  <span>Titulo</span>
-                  <input [value]="section.content.title || ''" (blur)="updateSectionContent(section, 'title', $any($event.target).value)">
-                </label>
-
-                <label class="sonic-field" *ngIf="showSectionField(section.type, 'heading')">
-                  <span>Heading</span>
-                  <input [value]="section.content.heading || ''" (blur)="updateSectionContent(section, 'heading', $any($event.target).value)">
-                </label>
-
-                <label class="sonic-field" *ngIf="showSectionField(section.type, 'planHeading')">
-                  <span>Titulo del plan</span>
-                  <input [value]="section.content.planHeading || ''" (blur)="updateSectionContent(section, 'planHeading', $any($event.target).value)">
-                </label>
-
-                <label class="sonic-field" *ngIf="showSectionField(section.type, 'ctaLabel')">
-                  <span>Texto CTA</span>
-                  <input [value]="section.content.ctaLabel || ''" (blur)="updateSectionContent(section, 'ctaLabel', $any($event.target).value)">
-                </label>
-              </div>
-
-              <label class="sonic-field" *ngIf="showSectionField(section.type, 'summary')">
-                <span>Resumen</span>
-                <textarea rows="3" (blur)="updateSectionContent(section, 'summary', $any($event.target).value)">{{ section.content.summary || '' }}</textarea>
-              </label>
-
-              <label class="sonic-field" *ngIf="showSectionField(section.type, 'description')">
-                <span>Descripcion</span>
-                <textarea rows="3" (blur)="updateSectionContent(section, 'description', $any($event.target).value)">{{ section.content.description || '' }}</textarea>
-              </label>
-
-              <label class="sonic-field" *ngIf="showSectionField(section.type, 'body')">
-                <span>Cuerpo</span>
-                <textarea rows="4" (blur)="updateSectionContent(section, 'body', $any($event.target).value)">{{ section.content.body || '' }}</textarea>
-              </label>
-
-              <label class="sonic-field" *ngIf="showSectionField(section.type, 'planSummary')">
-                <span>Resumen del plan</span>
-                <textarea rows="3" (blur)="updateSectionContent(section, 'planSummary', $any($event.target).value)">{{ section.content.planSummary || '' }}</textarea>
               </label>
             </div>
           </article>
@@ -285,6 +206,16 @@ import { EventoService } from '../../../core/services/events.service';
       .gallery-card {
         padding: 1.7rem;
         background: rgba(255, 255, 255, 0.88);
+      }
+      .feedback-note {
+        margin: 0 0 1rem;
+        font-weight: 700;
+      }
+      .feedback-note--success {
+        color: #418b58;
+      }
+      .feedback-note--error {
+        color: #b54848;
       }
       .gallery-card--muted {
         background: linear-gradient(180deg, #fffdf9 0%, #f7f1ea 100%);
@@ -414,6 +345,12 @@ import { EventoService } from '../../../core/services/events.service';
         background-size: cover;
         background-position: center;
         overflow: hidden;
+      }
+      .gallery-item__media img {
+        width: 100%;
+        height: 100%;
+        object-fit: cover;
+        display: block;
       }
       .drag-handle {
         position: absolute;
@@ -547,9 +484,12 @@ export class AdminEventsFormComponent implements OnInit {
     planName: ['', Validators.maxLength(120)],
     planSummary: ['', Validators.maxLength(2000)],
     totalPrice: [null as number | null],
+    status: ['pending_review'],
     isPublished: [false],
   });
   saving = signal(false);
+  saveMessage = signal('');
+  saveError = signal('');
   uploading = signal(false);
   galleryMessage = signal('');
   gallery = signal<GalleryImage[]>([]);
@@ -586,25 +526,31 @@ export class AdminEventsFormComponent implements OnInit {
       this.form.patchValue({
         title: item.title,
         category: item.category || 'other',
-        eventDate: item.eventDate || '',
+        eventDate: this.toDateInputValue(item.eventDate),
         location: item.location || '',
         description: item.description || '',
         planName: item.planName || '',
         planSummary: item.planSummary || '',
         totalPrice: item.totalPrice ?? null,
+        status: item.status,
         isPublished: item.isPublished,
       });
+      this.refreshGallery(eventId);
     });
   }
 
   onSubmit(): void {
     if (this.form.invalid) {
       this.form.markAllAsTouched();
+      this.saveError.set('Revisa los campos obligatorios antes de guardar.');
       return;
     }
 
     this.saving.set(true);
+    this.saveMessage.set('');
+    this.saveError.set('');
     const raw = this.form.getRawValue();
+    const status = raw.status || 'pending_review';
     const payload = {
       title: raw.title?.trim() || '',
       category: raw.category || 'other',
@@ -614,7 +560,8 @@ export class AdminEventsFormComponent implements OnInit {
       planName: raw.planName?.trim() || undefined,
       planSummary: raw.planSummary?.trim() || undefined,
       totalPrice: raw.totalPrice ?? undefined,
-      isPublished: !!raw.isPublished,
+      status,
+      isPublished: status === 'approved' ? !!raw.isPublished : false,
     };
 
     const request = this.isEditing
@@ -626,9 +573,17 @@ export class AdminEventsFormComponent implements OnInit {
         this.currentEvent.set(event);
         this.gallery.set(event.gallery || []);
         this.sections.set((event.sections || []).slice().sort((left, right) => left.order - right.order));
-        this.router.navigate(['/admin/events', event.id, 'edit']);
+        this.saveMessage.set(this.isEditing ? 'Evento actualizado correctamente.' : 'Evento creado correctamente.');
+        if (!this.isEditing) {
+          this.router.navigate(['/admin/events', event.id, 'edit']);
+          return;
+        }
+        this.loadEvent(event.id);
       },
-      error: () => this.saving.set(false),
+      error: (error) => {
+        this.saveError.set(this.readApiError(error, 'No se pudo guardar el evento.'));
+        this.saving.set(false);
+      },
       complete: () => this.saving.set(false),
     });
   }
@@ -648,9 +603,10 @@ export class AdminEventsFormComponent implements OnInit {
         this.currentEvent.set(response.event);
         this.gallery.set(response.gallery);
         this.galleryMessage.set(`${files.length} imagen(es) subidas correctamente.`);
+        this.refreshGallery(this.itemId!);
       },
       error: (error) => {
-        this.galleryMessage.set(error?.error?.error || 'No se pudieron subir las imagenes.');
+        this.galleryMessage.set(this.readApiError(error, 'No se pudieron subir las imagenes.'));
         this.uploading.set(false);
       },
       complete: () => {
@@ -742,6 +698,10 @@ export class AdminEventsFormComponent implements OnInit {
 
   getImageStyle(url: string): string {
     return `url('${this.eventsService.resolveAssetUrl(url)}')`;
+  }
+
+  resolveImageUrl(url: string): string {
+    return this.eventsService.resolveAssetUrl(url);
   }
 
   onSectionsDrop(event: CdkDragDrop<EventSection[]>): void {
@@ -875,6 +835,31 @@ export class AdminEventsFormComponent implements OnInit {
         .map((section) => (section.id === updated.id ? updated : section))
         .sort((left, right) => left.order - right.order)
     );
+  }
+
+  private refreshGallery(eventId: number): void {
+    this.eventsService.getEventGallery(eventId).subscribe({
+      next: (gallery) => this.gallery.set(gallery),
+    });
+  }
+
+  private toDateInputValue(value?: string | null): string {
+    return value ? value.slice(0, 10) : '';
+  }
+
+  private readApiError(error: any, fallback: string): string {
+    if (typeof error?.error?.error === 'string' && error.error.error.trim()) {
+      return error.error.error;
+    }
+
+    if (Array.isArray(error?.error?.errors) && error.error.errors.length > 0) {
+      return error.error.errors
+        .map((item: { msg?: string }) => item.msg)
+        .filter(Boolean)
+        .join(' ');
+    }
+
+    return fallback;
   }
 
   private generateSlug(value: string): string {

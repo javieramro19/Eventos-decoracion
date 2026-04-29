@@ -1,140 +1,72 @@
-import { Component, OnInit, signal } from '@angular/core';
+import { Component, OnDestroy, OnInit, signal } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { RouterModule } from '@angular/router';
 import { MatButtonModule } from '@angular/material/button';
-import { MatCardModule } from '@angular/material/card';
 import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
 import { AuthService } from '../../core/services/auth.service';
 import { EventoService } from '../../core/services/events.service';
-import { ContactStatus, DashboardStatItem, DashboardStats, EventContact } from '../../core/models/event.model';
+import { Evento } from '../../core/models/event.model';
 
 @Component({
   selector: 'app-dashboard',
   standalone: true,
-  imports: [CommonModule, RouterModule, MatButtonModule, MatCardModule, MatProgressSpinnerModule],
+  imports: [CommonModule, RouterModule, MatButtonModule, MatProgressSpinnerModule],
   template: `
     <div class="dashboard-container">
       <section class="hero-card">
         <div>
-          <span class="eyebrow">Panel de gestion</span>
+          <span class="eyebrow">Mis solicitudes</span>
           <h1>Hola, {{ authService.currentUser()?.name || 'cliente' }}.</h1>
-          <p class="subtitle">Controla de un vistazo tus eventos publicados, las solicitudes pendientes y las oportunidades que necesitan respuesta.</p>
+          <p class="subtitle">Aqui tienes tus planes enviados a EventoSonic. Puedes revisar cada solicitud, ajustarla y ver si ya ha sido confirmada o denegada.</p>
         </div>
 
         <div class="quick-actions">
-          <a mat-raised-button color="primary" routerLink="/admin/events/new">Nuevo evento</a>
-          <a mat-stroked-button routerLink="/admin/contacts">Ver solicitudes</a>
+          <a mat-raised-button color="primary" routerLink="/" fragment="planes">Crear nueva solicitud</a>
+          <a mat-stroked-button routerLink="/eventos">Ver eventos publicos</a>
         </div>
       </section>
 
       <div *ngIf="loading()" class="loading-state">
         <mat-spinner diameter="42"></mat-spinner>
-        <p>Cargando metricas del panel...</p>
+        <p>Cargando tus solicitudes...</p>
       </div>
 
-      <ng-container *ngIf="!loading() && stats() as data">
-        <section class="metrics-grid">
-          <mat-card class="metric-card accent">
-            <mat-card-content>
-              <span class="metric-label">Eventos totales</span>
-              <strong>{{ data.totalEvents }}</strong>
-              <p>Todos los proyectos guardados en tu cuenta.</p>
-            </mat-card-content>
-          </mat-card>
+      <section *ngIf="!loading() && requests().length === 0" class="empty-card">
+        <div class="ui-mark">ES</div>
+        <h2>Aun no has enviado ninguna solicitud</h2>
+        <p>Elige un plan, marca extras y te apareceran aqui como una bandeja para seguirlas despues.</p>
+        <a mat-raised-button color="primary" routerLink="/" fragment="planes">Ver planes</a>
+      </section>
 
-          <mat-card class="metric-card">
-            <mat-card-content>
-              <span class="metric-label">Eventos publicados</span>
-              <strong>{{ data.publishedEvents }}</strong>
-              <p>Ya visibles en la parte publica del portfolio.</p>
-            </mat-card-content>
-          </mat-card>
-
-          <mat-card class="metric-card warning">
-            <mat-card-content>
-              <span class="metric-label">Solicitudes pendientes</span>
-              <strong>{{ data.pendingContacts }}</strong>
-              <p>{{ data.stalePendingContacts > 0 ? data.stalePendingContacts + ' llevan mas de 24h sin respuesta.' : 'Revisa y convierte nuevas oportunidades.' }}</p>
-            </mat-card-content>
-          </mat-card>
-        </section>
-
-        <section class="alerts-card" *ngIf="data.alerts.length > 0">
-          <div class="section-head">
-            <div>
-              <span class="eyebrow">Alertas</span>
-              <h2>Lo que requiere atencion hoy</h2>
-            </div>
+      <section *ngIf="!loading() && requests().length > 0" class="requests-card">
+        <div class="requests-head">
+          <div>
+            <span class="eyebrow">Bandeja</span>
+            <h2>{{ requests().length }} solicitudes registradas</h2>
           </div>
-
-          <div class="alerts-list">
-            <article *ngFor="let alert of data.alerts" class="alert-item" [class.alert-item--high]="alert.severity === 'high'">
-              <strong>{{ alertLabel(alert) }}</strong>
-              <p>{{ alert.message }}</p>
-            </article>
-          </div>
-        </section>
-
-        <div class="content-grid">
-          <section class="panel-card">
-            <div class="section-head">
-              <div>
-                <span class="eyebrow">Solicitudes recientes</span>
-                <h2>Contactos que acaban de entrar</h2>
-              </div>
-              <a mat-stroked-button routerLink="/admin/contacts">Gestionarlas</a>
-            </div>
-
-            <div *ngIf="data.recentContacts.length === 0" class="empty-inline">
-              Aun no hay solicitudes recientes.
-            </div>
-
-            <div *ngIf="data.recentContacts.length > 0" class="list-stack">
-              <article *ngFor="let contact of data.recentContacts" class="list-item">
-                <div>
-                  <span class="badge" [ngClass]="'badge-' + contact.status">{{ contactStatusLabel(contact.status) }}</span>
-                  <a class="item-title" [routerLink]="['/admin/contacts']">{{ contact.name }}</a>
-                  <p>{{ contact.eventTitle || 'Evento' }} · {{ contact.email }}</p>
-                </div>
-                <div class="item-meta">
-                  <span>{{ formatDate(contact.createdAt) }}</span>
-                  <a *ngIf="contact.eventSlug" [routerLink]="['/eventos', contact.eventSlug]">Ver publico</a>
-                </div>
-              </article>
-            </div>
-          </section>
-
-          <section class="panel-card">
-            <div class="section-head">
-              <div>
-                <span class="eyebrow">Acceso rapido</span>
-                <h2>Eventos recientes</h2>
-              </div>
-              <a mat-stroked-button routerLink="/admin/events">Todos los eventos</a>
-            </div>
-
-            <div *ngIf="data.recentEvents.length === 0" class="empty-inline">
-              Aun no has creado eventos recientes.
-            </div>
-
-            <div *ngIf="data.recentEvents.length > 0" class="list-stack">
-              <article *ngFor="let event of data.recentEvents" class="list-item">
-                <div>
-                  <span class="badge" [ngClass]="event.isPublished ? 'badge-published' : 'badge-draft'">
-                    {{ event.isPublished ? 'Publicado' : 'Borrador' }}
-                  </span>
-                  <a class="item-title" [routerLink]="['/admin/events', event.id, 'edit']">{{ event.title }}</a>
-                  <p>{{ event.planName || formatCategory(event.category || 'other') }}</p>
-                </div>
-                <div class="item-meta">
-                  <span>{{ formatDate(event.createdAt) }}</span>
-                  <a [routerLink]="['/admin/events', event.id, 'edit']">Editar</a>
-                </div>
-              </article>
-            </div>
-          </section>
+          <p>La confirmacion final solo aparece cuando el admin aprueba tu plan.</p>
         </div>
-      </ng-container>
+
+        <div class="requests-list">
+          <a *ngFor="let event of requests()" class="request-row" [routerLink]="['/dashboard/events', event.id, 'edit']">
+            <div class="request-main">
+              <span class="badge" [ngClass]="statusClass(event)">{{ statusLabel(event) }}</span>
+              <h3>{{ event.title }}</h3>
+              <p>{{ event.planName || 'Plan personalizado' }}</p>
+            </div>
+
+            <div class="request-summary">
+              <strong>{{ event.totalPrice ? (event.totalPrice | currency:'EUR':'symbol':'1.0-0') : 'Precio pendiente' }}</strong>
+              <span>{{ requestSnippet(event) }}</span>
+            </div>
+
+            <div class="request-meta">
+              <span>{{ formatDate(event.updatedAt || event.createdAt) }}</span>
+              <strong>Ver detalles</strong>
+            </div>
+          </a>
+        </div>
+      </section>
     </div>
   `,
   styles: [
@@ -146,9 +78,8 @@ import { ContactStatus, DashboardStatItem, DashboardStats, EventContact } from '
         gap: 1.2rem;
       }
       .hero-card,
-      .alerts-card,
-      .panel-card,
-      .metric-card {
+      .requests-card,
+      .empty-card {
         border-radius: 32px;
         border: 1px solid var(--border);
         box-shadow: var(--shadow-sm);
@@ -171,20 +102,30 @@ import { ContactStatus, DashboardStatItem, DashboardStats, EventContact } from '
         font-size: 0.74rem;
         font-weight: 800;
       }
-      h1, h2 { font-family: var(--font-display); }
+      h1, h2, h3 {
+        margin: 0;
+        font-family: var(--font-display);
+      }
       h1 {
-        margin: 0.65rem 0 0;
+        margin-top: 0.65rem;
         font-size: clamp(2.4rem, 4vw, 4rem);
         line-height: 1.08;
       }
       h2 {
-        margin: 0.4rem 0 0;
+        margin-top: 0.45rem;
         font-size: 2rem;
         line-height: 1.08;
       }
-      .subtitle {
-        max-width: 58ch;
-        margin: 0.8rem 0 0;
+      h3 {
+        margin-top: 0.55rem;
+        font-size: 1.3rem;
+      }
+      .subtitle,
+      .requests-head p,
+      .request-main p,
+      .request-summary span,
+      .request-meta span,
+      .empty-card p {
         color: var(--muted);
       }
       .quick-actions {
@@ -192,122 +133,69 @@ import { ContactStatus, DashboardStatItem, DashboardStats, EventContact } from '
         flex-wrap: wrap;
         gap: 0.75rem;
       }
-      .loading-state {
+      .loading-state,
+      .empty-card {
+        min-height: 240px;
         display: grid;
         place-items: center;
-        min-height: 240px;
-        color: var(--muted);
+        text-align: center;
+        gap: 0.8rem;
       }
-      .metrics-grid,
-      .content-grid {
-        display: grid;
-        gap: 1rem;
+      .requests-card {
+        padding: 1.4rem;
       }
-      .metrics-grid {
-        grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
-      }
-      .content-grid {
-        grid-template-columns: repeat(2, minmax(0, 1fr));
-      }
-      .metric-card mat-card-content {
-        padding: 1.35rem;
-      }
-      .metric-card.accent {
-        background: linear-gradient(160deg, #a86f4d 0%, #c9ab8f 100%);
-        color: #fff;
-      }
-      .metric-card.warning {
-        background: linear-gradient(160deg, #f7efe1 0%, #f0dfbf 100%);
-      }
-      .metric-label {
-        display: block;
-        font-size: 0.82rem;
-        text-transform: uppercase;
-        letter-spacing: 0.08em;
-        opacity: 0.85;
-      }
-      .metric-card strong {
-        display: block;
-        margin: 0.55rem 0;
-        font-size: 2.2rem;
-        line-height: 1;
-        font-family: var(--font-display);
-      }
-      .metric-card p {
-        margin: 0;
-        color: inherit;
-        opacity: 0.82;
-      }
-      .alerts-card,
-      .panel-card {
-        padding: 1.5rem;
-      }
-      .section-head {
+      .requests-head {
         display: flex;
         justify-content: space-between;
         gap: 1rem;
-        align-items: flex-start;
+        align-items: flex-end;
+        margin-bottom: 1rem;
       }
-      .alerts-list,
-      .list-stack {
+      .requests-list {
         display: grid;
-        gap: 0.9rem;
-        margin-top: 1rem;
+        gap: 0.85rem;
       }
-      .alert-item,
-      .list-item {
-        padding: 1rem;
+      .request-row {
+        display: grid;
+        grid-template-columns: minmax(0, 1.5fr) minmax(220px, 1fr) minmax(150px, 0.65fr);
+        gap: 1rem;
+        align-items: center;
+        padding: 1rem 1.15rem;
         border-radius: 24px;
-        background: rgba(243, 236, 226, 0.76);
+        background: linear-gradient(180deg, #ffffff 0%, #faf5ee 100%);
+        color: inherit;
+        text-decoration: none;
+        border: 1px solid rgba(44, 44, 44, 0.06);
+        transition: transform 0.22s ease, box-shadow 0.22s ease;
       }
-      .alert-item--high {
-        background: rgba(245, 210, 210, 0.76);
+      .request-row:hover {
+        transform: translateY(-3px);
+        box-shadow: 0 16px 34px rgba(44, 44, 44, 0.08);
       }
-      .alert-item strong,
-      .item-title {
-        display: inline-block;
-        font-weight: 800;
+      .request-summary,
+      .request-meta {
+        display: grid;
+        gap: 0.3rem;
+      }
+      .request-summary strong,
+      .request-meta strong {
         color: var(--text);
       }
-      .item-title {
-        text-decoration: none;
-        margin-top: 0.55rem;
-      }
-      .alert-item p,
-      .list-item p,
-      .empty-inline {
-        margin: 0.4rem 0 0;
-        color: var(--muted);
-      }
-      .list-item {
-        display: flex;
-        justify-content: space-between;
-        gap: 1rem;
-      }
-      .item-meta {
-        display: flex;
-        flex-direction: column;
-        align-items: flex-end;
-        gap: 0.5rem;
-        color: var(--text-soft);
+      .request-meta {
+        justify-items: end;
       }
       .badge {
         display: inline-flex;
+        width: fit-content;
         padding: 0.38rem 0.7rem;
         border-radius: 999px;
         font-size: 0.8rem;
         font-weight: 800;
       }
-      .badge-pending,
       .badge-draft {
         background: rgba(212, 175, 122, 0.16);
         color: var(--accent-strong);
       }
-      .badge-contacted {
-        background: rgba(111, 160, 215, 0.16);
-        color: #406b9e;
-      }
-      .badge-converted,
       .badge-published {
         background: rgba(110, 203, 141, 0.18);
         color: #418b58;
@@ -316,70 +204,94 @@ import { ContactStatus, DashboardStatItem, DashboardStats, EventContact } from '
         background: rgba(200, 72, 72, 0.14);
         color: #b54848;
       }
-      .empty-inline {
-        padding: 1rem 0;
-      }
       @media (max-width: 900px) {
-        .content-grid {
+        .request-row {
           grid-template-columns: 1fr;
+          align-items: flex-start;
+        }
+        .request-meta {
+          justify-items: start;
         }
       }
       @media (max-width: 760px) {
         .hero-card,
-        .section-head,
-        .list-item {
+        .requests-head {
           display: grid;
-        }
-        .item-meta {
           align-items: flex-start;
         }
       }
     `,
   ],
 })
-export class DashboardComponent implements OnInit {
-  stats = signal<DashboardStats | null>(null);
+export class DashboardComponent implements OnInit, OnDestroy {
+  requests = signal<Evento[]>([]);
   loading = signal(false);
+  private pollId: ReturnType<typeof setInterval> | null = null;
 
   constructor(public authService: AuthService, private eventsService: EventoService) {}
 
   ngOnInit(): void {
-    this.loading.set(true);
-    this.eventsService.getDashboardStats().subscribe({
-      next: (data) => {
-        this.stats.set(data);
+    this.loadRequests(true);
+    this.pollId = setInterval(() => this.loadRequests(false), 15000);
+  }
+
+  ngOnDestroy(): void {
+    if (this.pollId) {
+      clearInterval(this.pollId);
+    }
+  }
+
+  loadRequests(showLoader = true): void {
+    if (showLoader) {
+      this.loading.set(true);
+    }
+
+    this.eventsService.getClientEvents().subscribe({
+      next: (items) => {
+        const sorted = items.slice().sort((left, right) => {
+          return new Date(right.updatedAt || right.createdAt).getTime() - new Date(left.updatedAt || left.createdAt).getTime();
+        });
+        this.requests.set(sorted);
         this.loading.set(false);
       },
       error: () => this.loading.set(false),
     });
   }
 
-  alertLabel(alert: DashboardStatItem): string {
-    return alert.severity === 'high' ? 'Atencion prioritaria' : 'Recordatorio';
+  statusLabel(event: Evento): string {
+    if (event.status === 'approved') {
+      return event.isPublished ? 'Publicado' : 'Confirmado';
+    }
+
+    if (event.status === 'rejected') {
+      return 'Solicitud denegada';
+    }
+
+    return 'Pendiente';
   }
 
-  contactStatusLabel(status: ContactStatus): string {
-    const labels: Record<ContactStatus, string> = {
-      pending: 'Pendiente',
-      contacted: 'Contactado',
-      converted: 'Convertido',
-      rejected: 'Rechazado',
-    };
+  statusClass(event: Evento): string {
+    if (event.status === 'approved') {
+      return 'badge-published';
+    }
 
-    return labels[status];
+    if (event.status === 'rejected') {
+      return 'badge-rejected';
+    }
+
+    return 'badge-draft';
   }
 
-  formatCategory(value: string): string {
-    const map: Record<string, string> = {
-      wedding: 'Boda',
-      birthday: 'Cumpleanos',
-      corporate: 'Corporativo',
-      baptism: 'Bautizo',
-      communion: 'Comunion',
-      other: 'Otros',
-    };
+  requestSnippet(event: Evento): string {
+    if (event.status === 'approved') {
+      return 'Tu plan ya esta confirmado por administracion.';
+    }
 
-    return map[value] || value;
+    if (event.status === 'rejected') {
+      return 'La solicitud fue denegada y puede requerir una nueva propuesta.';
+    }
+
+    return 'Esperando revision del equipo de EventoSonic.';
   }
 
   formatDate(value: string): string {

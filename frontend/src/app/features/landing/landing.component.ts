@@ -57,9 +57,9 @@ export class LandingComponent {
     },
   ];
   contact = [
-    { title: 'Zona de trabajo', value: 'Almeria y alrededores, con servicio segun disponibilidad.' },
-    { title: 'Tipo de eventos', value: 'Bodas, comuniones, cumpleanos, bautizos y eventos corporativos.' },
-    { title: 'Primer paso', value: 'Elegir un plan y personalizarlo con los extras que necesites.' },
+    { title: 'Ubicacion', value: 'Almeria, Andalucia, Espana' },
+    { title: 'Telefono', value: '647 808 298' },
+    { title: 'Email', value: 'eventosonic25@gmail.com' },
   ];
 
   get authRoute(): string {

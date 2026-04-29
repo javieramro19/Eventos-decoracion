@@ -1,4 +1,4 @@
-import { Component, OnInit, signal } from '@angular/core';
+import { Component, OnDestroy, OnInit, signal } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { RouterModule } from '@angular/router';
 import { MatButtonModule } from '@angular/material/button';
@@ -178,20 +178,31 @@ import { EventoService } from '../../../core/services/events.service';
     `,
   ],
 })
-export class AdminContactsComponent implements OnInit {
+export class AdminContactsComponent implements OnInit, OnDestroy {
   contacts = signal<EventContact[]>([]);
   loading = signal(false);
   busyIds = signal<number[]>([]);
   statuses: ContactStatus[] = ['pending', 'contacted', 'converted', 'rejected'];
+  private pollId: ReturnType<typeof setInterval> | null = null;
 
   constructor(private eventsService: EventoService) {}
 
   ngOnInit(): void {
     this.loadContacts();
+    this.pollId = setInterval(() => this.loadContacts(false), 15000);
   }
 
-  loadContacts(): void {
-    this.loading.set(true);
+  ngOnDestroy(): void {
+    if (this.pollId) {
+      clearInterval(this.pollId);
+    }
+  }
+
+  loadContacts(showLoader = true): void {
+    if (showLoader) {
+      this.loading.set(true);
+    }
+
     this.eventsService.getAdminContacts().subscribe({
       next: (contacts) => {
         this.contacts.set(contacts);
